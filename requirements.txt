@@ -1,0 +1,12 @@
+# Python dependencies for the BO-adaptive neural residual-compression code.
+# Install with:  pip install -r requirements.txt
+#
+# NOT installable via pip (set up separately — see README "Prerequisites"):
+#   - SZ3 + its pysz Python wrapper
+#   - the SPERR command-line tool (sperr3d), used in SPERR/
+
+numpy
+torch
+matplotlib
+pandas
+optuna

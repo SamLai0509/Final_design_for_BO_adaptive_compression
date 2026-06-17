@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.DS_Store
+
+# Scientific data volumes + base-codec bitstreams (not part of the repo)
+*.raw
+*.f32
+*.d64
+*.sz
+*.npy
+
+# Model checkpoints
+*.pt
+*.pth
+ablation_ckpts/

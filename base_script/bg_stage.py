@@ -46,8 +46,22 @@ from bg_normalize import (
 )
 from bg_sampling import (
     _gaussian_low_high_split_t, _gaussian_low_mid_high_split_t,
-    _sample_bg_training_batch,
+    _sample_bg_training_batch, _sample_slice2d_gpu, _to_gpu_volume,
 )
+
+
+def _to_device(v, device):
+    """Move a numpy array or tensor to ``device``.
+
+    Tensors (e.g. from the device-resident sampler) are moved as-is; numpy arrays are
+    pinned + copied async on CUDA so the host->device transfer overlaps compute.
+    """
+    if torch.is_tensor(v):
+        return v if v.device == torch.device(device) else v.to(device, non_blocking=True)
+    t = torch.from_numpy(v)
+    if torch.device(device).type == "cuda":
+        return t.pin_memory().to(device, non_blocking=True)
+    return t.to(device)
 
 
 def unwrap_bg_model(model):
@@ -291,12 +305,21 @@ def train_bg_only(
 
     seed = getattr(cfg, "seed", 42)
     set_deterministic_seed(seed)
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True          # autotune fixed-size convs
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
 
     n_fields = len(Xps)
     depth, height, width = Xs[0].shape
 
     true_residuals = Xs[0] - Xps[0]
     Xs_for_sampling = [true_residuals] + Xs[1:]
+    # Pull any disk-backed memmap fields into RAM once, so per-step patch sampling
+    # doesn't trigger random disk reads every step (a major batch=1 bottleneck).
+    _ram = lambda a: np.array(a) if isinstance(a, np.memmap) else a
+    Xs_for_sampling = [_ram(a) for a in Xs_for_sampling]
+    Xps = [_ram(a) for a in Xps]
 
     model = UNET_Model(
         n_fields=n_fields,
@@ -416,6 +439,31 @@ def train_bg_only(
 
     mean_t, std_t, min_t, max_t = _build_input_norm_tensors(cfg, device, n_fields)
 
+    # ---- Optional device-resident sampling (kills per-step disk / CPU / transfer) ----
+    # Keep the sampling volumes on `device` and slice patches there; identical indices
+    # -> identical patches. Auto-on for the slice2d / no-mask case when it fits in VRAM;
+    # force with cfg.bg_gpu_sampling = True / disable with False.
+    gpu_sampling = False
+    Xs_gpu = Xps_gpu = None
+    _gpu_want = getattr(cfg, "bg_gpu_sampling", "auto")
+    if _bg_arch_kind(cfg) == "slice2d" and sampling_mask is None and _gpu_want is not False:
+        _need = int(sum(a.size for a in Xs_for_sampling) + sum(a.size for a in Xps)) * 4
+        if _gpu_want is True:
+            _enable = True
+        elif torch.device(device).type == "cuda":
+            try:
+                _free = torch.cuda.mem_get_info(device)[0]
+            except Exception:
+                _free = 0
+            _enable = _free > 0 and _need < 0.6 * _free
+        else:
+            _enable = False
+        if _enable:
+            Xs_gpu = [_to_gpu_volume(a, device) for a in Xs_for_sampling]
+            Xps_gpu = [_to_gpu_volume(a, device) for a in Xps]
+            gpu_sampling = True
+            print(f"{_log_pfx}[gpu-sampling] {len(Xps_gpu)} fields resident on {device} (~{_need/1e9:.1f} GB)")
+
     for ep in range(cfg.epochs):
         if stop_training:
             break
@@ -445,25 +493,26 @@ def train_bg_only(
 
             step_seed = seed + ep * 10000 + step
 
-            bg_dict = _sample_bg_training_batch(
-                Xs_for_sampling,
-                Xps,
-                cfg,
-                ep,
-                step,
-                seed=step_seed,
-                sampling_mask=sampling_mask,
-                sampling_min_frac=sampling_min_frac,
-            )
+            if gpu_sampling:
+                bg_dict = _sample_slice2d_gpu(Xs_gpu, Xps_gpu, cfg, ep, step, seed=step_seed)
+            else:
+                bg_dict = _sample_bg_training_batch(
+                    Xs_for_sampling,
+                    Xps,
+                    cfg,
+                    ep,
+                    step,
+                    seed=step_seed,
+                    sampling_mask=sampling_mask,
+                    sampling_min_frac=sampling_min_frac,
+                )
 
-            bg_xs_t = torch.from_numpy(bg_dict["xp"]).to(device)
-            bg_ys_norm = normalize_bg_residual_tensor(
-                torch.from_numpy(bg_dict["x"]).to(device), cfg
-            )
+            bg_xs_t = _to_device(bg_dict["xp"], device)
+            bg_ys_norm = normalize_bg_residual_tensor(_to_device(bg_dict["x"], device), cfg)
             z_key = "z" if "z" in bg_dict else "zc"
-            bg_z_idx = torch.from_numpy(bg_dict[z_key]).to(device)
-            bg_y0 = torch.from_numpy(bg_dict["y0"]).to(device)
-            bg_x0 = torch.from_numpy(bg_dict["x0"]).to(device)
+            bg_z_idx = _to_device(bg_dict[z_key], device)
+            bg_y0 = _to_device(bg_dict["y0"], device)
+            bg_x0 = _to_device(bg_dict["x0"], device)
 
             bg_xs_norm = _normalize_bg_batch(bg_xs_t, cfg, mean_t, std_t, min_t, max_t)
 

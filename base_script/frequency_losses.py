@@ -20,6 +20,44 @@ import torch
 import torch.nn.functional as F
 
 
+# --- Cached Hann window + radial band-weight map -------------------------------
+# These depend only on (H, W, focus, boost, device) -- not the patch values -- so
+# build them once per shape and reuse across steps (no rebuild every forward).
+_HANN_CACHE = {}
+_RADIAL_W_CACHE = {}
+
+
+def _hann_window2d(height, width, device):
+    key = (int(height), int(width), str(device))
+    w = _HANN_CACHE.get(key)
+    if w is None:
+        wy = torch.hann_window(height, periodic=False, device=device, dtype=torch.float32)
+        wx = torch.hann_window(width, periodic=False, device=device, dtype=torch.float32)
+        w = torch.outer(wy, wx).view(1, 1, height, width)
+        _HANN_CACHE[key] = w
+    return w
+
+
+def _radial_band_weight(height, width, focus, boost, device):
+    key = (int(height), int(width), str(focus).lower(), float(boost), str(device))
+    fw = _RADIAL_W_CACHE.get(key)
+    if fw is None:
+        fy = torch.fft.fftfreq(height, d=1.0, device=device, dtype=torch.float32)
+        fx = torch.fft.rfftfreq(width, d=1.0, device=device, dtype=torch.float32)
+        rr = torch.sqrt(fy[:, None] ** 2 + fx[None, :] ** 2)
+        rr = rr / (rr.max() + 1e-8)
+        f = str(focus).lower()
+        if f == "low":
+            fw = 1.0 + float(boost) * (1.0 - rr)
+        elif f == "high":
+            fw = 1.0 + float(boost) * rr
+        else:
+            fw = torch.ones_like(rr)
+        fw = fw.view(1, 1, height, width // 2 + 1)
+        _RADIAL_W_CACHE[key] = fw
+    return fw
+
+
 def fft_mag_phase_loss_bg_t(
     pred,
     tgt,
@@ -58,9 +96,7 @@ def fft_mag_phase_loss_bg_t(
     # --- Separable 2-D Hann window (float32) ---------------------------------------
     # Tapering the patch to ~0 at the borders avoids the high-frequency artefacts that
     # the FFT would otherwise see from the discontinuity between opposite edges.
-    wy = torch.hann_window(height, periodic=False, device=device, dtype=torch.float32)
-    wx = torch.hann_window(width, periodic=False, device=device, dtype=torch.float32)
-    window = torch.outer(wy, wx).view(1, 1, height, width)
+    window = _hann_window2d(height, width, device)
 
     # --- Window + forward FFT (float32 for backend compatibility) ------------------
     pred_w = pred.float() * window
@@ -77,18 +113,7 @@ def fft_mag_phase_loss_bg_t(
 
     # --- Radial band weight on the rfft2 grid (H x (W//2+1)) -----------------------
     # rr is the normalised radial frequency (distance from DC), in [0, 1].
-    fy = torch.fft.fftfreq(height, d=1.0, device=device, dtype=torch.float32)
-    fx = torch.fft.rfftfreq(width, d=1.0, device=device, dtype=torch.float32)
-    rr = torch.sqrt(fy[:, None] ** 2 + fx[None, :] ** 2)
-    rr = rr / (rr.max() + 1e-8)
-    focus = str(focus).lower()
-    if focus == "low":
-        freq_weight = 1.0 + float(boost) * (1.0 - rr)   # weight ~ (1+boost) at DC -> 1 at Nyquist
-    elif focus == "high":
-        freq_weight = 1.0 + float(boost) * rr           # weight ~ 1 at DC -> (1+boost) at Nyquist
-    else:
-        freq_weight = torch.ones_like(rr)
-    freq_weight = freq_weight.view(1, 1, height, width // 2 + 1)
+    freq_weight = _radial_band_weight(height, width, focus, boost, device)
 
     # --- Magnitude loss ------------------------------------------------------------
     loss_mag = (((pred_logmag - tgt_logmag) ** 2) * freq_weight).mean()

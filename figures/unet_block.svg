@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" font-family="Helvetica,Arial,sans-serif">
+<defs><marker id="bk" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 z" fill="#222"/></marker><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#fff"/><line x1="0" y1="0" x2="0" y2="6" stroke="#bbb" stroke-width="1.2"/></pattern></defs>
+<rect width="1280" height="640" fill="#ffffff"/>
+<text x="40" y="40" font-size="20" font-weight="700" fill="#111">Micro-UNet residual model — block view + frequency heads</text>
+<polygon points="60,120 76,108 110,108 94,120" fill="#EFEFEF" stroke="#888888" stroke-width="1.5"/><polygon points="94,120 110,108 110,408 94,420" fill="#E4E4E4" stroke="#888888" stroke-width="1.5"/><rect x="60" y="120" width="34" height="300" fill="url(#hatch)" stroke="#888888" stroke-width="1.5"/>
+<polygon points="108,120 124,108 158,108 142,120" fill="#FAE3C6" stroke="#E0903C" stroke-width="1.5"/><polygon points="142,120 158,108 158,408 142,420" fill="#E7BE8C" stroke="#E0903C" stroke-width="1.5"/><rect x="108" y="120" width="34" height="300" fill="#F3D2A8" stroke="#E0903C" stroke-width="1.5"/><text x="125.0" y="274.0" text-anchor="middle" font-size="12" font-weight="700" fill="#7a4a12">x1</text>
+<polygon points="158,250 174,238 208,238 192,250" fill="#F4C6C6" stroke="#C9595B" stroke-width="1.5"/><polygon points="192,250 208,238 208,426 192,438" fill="#DE8E8E" stroke="#C9595B" stroke-width="1.5"/><rect x="158" y="250" width="34" height="188" fill="#ECA8A8" stroke="#C9595B" stroke-width="1.5"/>
+<polygon points="196,250 212,238 246,238 230,250" fill="#FAE3C6" stroke="#E0903C" stroke-width="1.5"/><polygon points="230,250 246,238 246,426 230,438" fill="#E7BE8C" stroke="#E0903C" stroke-width="1.5"/><rect x="196" y="250" width="34" height="188" fill="#F3D2A8" stroke="#E0903C" stroke-width="1.5"/><text x="213.0" y="348.0" text-anchor="middle" font-size="12" font-weight="700" fill="#7a4a12">x2</text>
+<polygon points="246,330 262,318 296,318 280,330" fill="#F4C6C6" stroke="#C9595B" stroke-width="1.5"/><polygon points="280,330 296,318 296,436 280,448" fill="#DE8E8E" stroke="#C9595B" stroke-width="1.5"/><rect x="246" y="330" width="34" height="118" fill="#ECA8A8" stroke="#C9595B" stroke-width="1.5"/>
+<polygon points="284,330 300,318 334,318 318,330" fill="#FAE3C6" stroke="#E0903C" stroke-width="1.5"/><polygon points="318,330 334,318 334,436 318,448" fill="#E7BE8C" stroke="#E0903C" stroke-width="1.5"/><rect x="284" y="330" width="34" height="118" fill="#F3D2A8" stroke="#E0903C" stroke-width="1.5"/><text x="301.0" y="393.0" text-anchor="middle" font-size="12" font-weight="700" fill="#7a4a12">x3</text>
+<polygon points="372,250 388,238 422,238 406,250" fill="#CBDDF2" stroke="#5A88BE" stroke-width="1.5"/><polygon points="406,250 422,238 422,426 406,438" fill="#93B5DB" stroke="#5A88BE" stroke-width="1.5"/><rect x="372" y="250" width="34" height="188" fill="#AFCBE8" stroke="#5A88BE" stroke-width="1.5"/>
+<polygon points="410,250 426,238 460,238 444,250" fill="#F4F4F4" stroke="#E0903C" stroke-width="1.5"/><polygon points="444,250 460,238 460,426 444,438" fill="#ECECEC" stroke="#E0903C" stroke-width="1.5"/><rect x="410" y="250" width="34" height="188" fill="#FFFFFF" stroke="#E0903C" stroke-width="1.5"/>
+<polygon points="448,250 464,238 498,238 482,250" fill="#FAE3C6" stroke="#E0903C" stroke-width="1.5"/><polygon points="482,250 498,238 498,426 482,438" fill="#E7BE8C" stroke="#E0903C" stroke-width="1.5"/><rect x="448" y="250" width="34" height="188" fill="#F3D2A8" stroke="#E0903C" stroke-width="1.5"/><text x="465.0" y="348.0" text-anchor="middle" font-size="12" font-weight="700" fill="#7a4a12">u1</text>
+<polygon points="536,120 552,108 586,108 570,120" fill="#CBDDF2" stroke="#5A88BE" stroke-width="1.5"/><polygon points="570,120 586,108 586,408 570,420" fill="#93B5DB" stroke="#5A88BE" stroke-width="1.5"/><rect x="536" y="120" width="34" height="300" fill="#AFCBE8" stroke="#5A88BE" stroke-width="1.5"/>
+<polygon points="574,120 590,108 624,108 608,120" fill="#F4F4F4" stroke="#E0903C" stroke-width="1.5"/><polygon points="608,120 624,108 624,408 608,420" fill="#ECECEC" stroke="#E0903C" stroke-width="1.5"/><rect x="574" y="120" width="34" height="300" fill="#FFFFFF" stroke="#E0903C" stroke-width="1.5"/>
+<polygon points="612,120 628,108 662,108 646,120" fill="#FAE3C6" stroke="#E0903C" stroke-width="1.5"/><polygon points="646,120 662,108 662,408 646,420" fill="#E7BE8C" stroke="#E0903C" stroke-width="1.5"/><rect x="612" y="120" width="34" height="300" fill="#F3D2A8" stroke="#E0903C" stroke-width="1.5"/><text x="629.0" y="274.0" text-anchor="middle" font-size="12" font-weight="700" fill="#7a4a12">u2</text>
+<polygon points="660,120 676,108 710,108 694,120" fill="#FAE3C6" stroke="#E0903C" stroke-width="1.5"/><polygon points="694,120 710,108 710,408 694,420" fill="#E7BE8C" stroke="#E0903C" stroke-width="1.5"/><rect x="660" y="120" width="34" height="300" fill="#F3D2A8" stroke="#E0903C" stroke-width="1.5"/>
+<text x="82" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#333">input</text>
+<text x="152" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#333">conv1 (inc)</text>
+<text x="207" y="234" text-anchor="middle" font-size="13" font-weight="700" fill="#333">conv2 (↓2)</text>
+<text x="297" y="314" text-anchor="middle" font-size="13" font-weight="700" fill="#333">conv3 (↓2)</text>
+<text x="443" y="234" text-anchor="middle" font-size="13" font-weight="700" fill="#333">deconv1 (↑2)</text>
+<text x="597" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#333">deconv2 (↑2)</text>
+<text x="683" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#333">outc</text>
+<path d="M 150,150 L 574,150" fill="none" stroke="#222" stroke-width="2" marker-end="url(#bk)"/><text x="360" y="145" text-anchor="middle" font-size="10.5" fill="#333">skip · concatenate</text>
+<path d="M 238,278 L 410,278" fill="none" stroke="#222" stroke-width="2" marker-end="url(#bk)"/><text x="324" y="273" text-anchor="middle" font-size="10.5" fill="#333">skip · concatenate</text>
+<text x="774" y="126" font-size="11.5" fill="#666">four 3×3 heads → 1 ch (zero-init)</text>
+<polygon points="760,150 776,138 804,138 788,150" fill="#FBF1D8" stroke="#C79A3E" stroke-width="1.5"/><polygon points="788,150 804,138 804,198 788,210" fill="#EFD9A6" stroke="#C79A3E" stroke-width="1.5"/><rect x="760" y="150" width="28" height="60" fill="#F6E7C2" stroke="#C79A3E" stroke-width="1.5"/>
+<path d="M 694,270 L 760,180" fill="none" stroke="#aaa" stroke-width="2" marker-end="url(#bk)"/>
+<path d="M 804,180 L 846,180" fill="none" stroke="#222" stroke-width="2" marker-end="url(#bk)"/>
+<text x="852" y="184" font-size="13" font-weight="700" fill="#333">R̂  (combined)</text>
+<polygon points="760,222 776,210 804,210 788,222" fill="#E0F4E4" stroke="#3A9D4F" stroke-width="1.5"/><polygon points="788,222 804,210 804,270 788,282" fill="#BBE3C2" stroke="#3A9D4F" stroke-width="1.5"/><rect x="760" y="222" width="28" height="60" fill="#CDEBD3" stroke="#3A9D4F" stroke-width="1.5"/>
+<path d="M 694,270 L 760,252" fill="none" stroke="#aaa" stroke-width="2" marker-end="url(#bk)"/>
+<path d="M 804,252 L 846,252" fill="none" stroke="#222" stroke-width="2" marker-end="url(#bk)"/>
+<text x="852" y="256" font-size="13" font-weight="700" fill="#333">R_low</text>
+<polygon points="760,294 776,282 804,282 788,294" fill="#E3EEFB" stroke="#3A73C2" stroke-width="1.5"/><polygon points="788,294 804,282 804,342 788,354" fill="#B7D0EF" stroke="#3A73C2" stroke-width="1.5"/><rect x="760" y="294" width="28" height="60" fill="#CFE0F6" stroke="#3A73C2" stroke-width="1.5"/>
+<path d="M 694,270 L 760,324" fill="none" stroke="#aaa" stroke-width="2" marker-end="url(#bk)"/>
+<path d="M 804,324 L 846,324" fill="none" stroke="#222" stroke-width="2" marker-end="url(#bk)"/>
+<text x="852" y="328" font-size="13" font-weight="700" fill="#333">R_mid</text>
+<polygon points="760,366 776,354 804,354 788,366" fill="#FBE2E1" stroke="#C0463F" stroke-width="1.5"/><polygon points="788,366 804,354 804,414 788,426" fill="#EFB9B7" stroke="#C0463F" stroke-width="1.5"/><rect x="760" y="366" width="28" height="60" fill="#F6CFCE" stroke="#C0463F" stroke-width="1.5"/>
+<path d="M 694,270 L 760,396" fill="none" stroke="#aaa" stroke-width="2" marker-end="url(#bk)"/>
+<path d="M 804,396 L 846,396" fill="none" stroke="#222" stroke-width="2" marker-end="url(#bk)"/>
+<text x="852" y="400" font-size="13" font-weight="700" fill="#333">R_high</text>
+<text x="770" y="452" font-size="11.5" fill="#3a73c2">R_low + R_mid + R_high = R̂  (predicted residual)</text>
+<rect x="1024" y="94" width="236" height="272" rx="10" fill="#fcfcfd" stroke="#e2e2e2"/>
+<polygon points="1040,120 1056,108 1080,108 1064,120" fill="#EFEFEF" stroke="#888888" stroke-width="1.5"/><polygon points="1064,120 1080,108 1080,130 1064,142" fill="#E4E4E4" stroke="#888888" stroke-width="1.5"/><rect x="1040" y="120" width="24" height="22" fill="url(#hatch)" stroke="#888888" stroke-width="1.5"/>
+<text x="1090" y="136" font-size="12" fill="#333">input (n_fields × H×W)</text>
+<polygon points="1040,154 1056,142 1080,142 1064,154" fill="#FAE3C6" stroke="#E0903C" stroke-width="1.5"/><polygon points="1064,154 1080,142 1080,164 1064,176" fill="#E7BE8C" stroke="#E0903C" stroke-width="1.5"/><rect x="1040" y="154" width="24" height="22" fill="#F3D2A8" stroke="#E0903C" stroke-width="1.5"/>
+<text x="1090" y="170" font-size="12" fill="#333">convolution 3×3 + GELU</text>
+<polygon points="1040,188 1056,176 1080,176 1064,188" fill="#F4C6C6" stroke="#C9595B" stroke-width="1.5"/><polygon points="1064,188 1080,176 1080,198 1064,210" fill="#DE8E8E" stroke="#C9595B" stroke-width="1.5"/><rect x="1040" y="188" width="24" height="22" fill="#ECA8A8" stroke="#C9595B" stroke-width="1.5"/>
+<text x="1090" y="204" font-size="12" fill="#333">down-sample (stride-2 conv)</text>
+<polygon points="1040,222 1056,210 1080,210 1064,222" fill="#F4F4F4" stroke="#E0903C" stroke-width="1.5"/><polygon points="1064,222 1080,210 1080,232 1064,244" fill="#ECECEC" stroke="#E0903C" stroke-width="1.5"/><rect x="1040" y="222" width="24" height="22" fill="#FFFFFF" stroke="#E0903C" stroke-width="1.5"/>
+<text x="1090" y="238" font-size="12" fill="#333">concatenate (skip)</text>
+<polygon points="1040,256 1056,244 1080,244 1064,256" fill="#CBDDF2" stroke="#5A88BE" stroke-width="1.5"/><polygon points="1064,256 1080,244 1080,266 1064,278" fill="#93B5DB" stroke="#5A88BE" stroke-width="1.5"/><rect x="1040" y="256" width="24" height="22" fill="#AFCBE8" stroke="#5A88BE" stroke-width="1.5"/>
+<text x="1090" y="272" font-size="12" fill="#333">up-sample (bilinear ×2)</text>
+<polygon points="1040,290 1056,278 1080,278 1064,290" fill="#E3EEFB" stroke="#3A73C2" stroke-width="1.5"/><polygon points="1064,290 1080,278 1080,300 1064,312" fill="#B7D0EF" stroke="#3A73C2" stroke-width="1.5"/><rect x="1040" y="290" width="24" height="22" fill="#CFE0F6" stroke="#3A73C2" stroke-width="1.5"/>
+<text x="1090" y="306" font-size="12" fill="#333">frequency-head output</text>
+<path d="M 1040,332 L 1074,332" fill="none" stroke="#222" stroke-width="2" marker-end="url(#bk)"/>
+<text x="1090" y="336" font-size="12" fill="#333">skip connection</text>
+</svg>

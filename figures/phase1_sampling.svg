@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="470" viewBox="0 0 1180 470" font-family="Helvetica,Arial,sans-serif">
+<defs><marker id="arr" markerWidth="11" markerHeight="11" refX="8.5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3 L0,6 z" fill="#555"/></marker></defs>
+<rect width="1180" height="470" fill="#ffffff"/>
+<text x="590.0" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#111">Phase-1 BO — strided slice sampling</text>
+<text x="590.0" y="56" text-anchor="middle" font-size="12.5" fill="#666">cheap proxy: train on a strided subset of slices to score each candidate learning-rate / axis</text>
+<text x="60" y="108" font-size="12.5" font-weight="700" fill="#333">Volume — D slices along the slicing axis (BO-chosen 0 / 1 / 2)</text>
+<rect x="60" y="120" width="12" height="150" rx="2" fill="#f0a04b" stroke="#d9822b" stroke-width="1.5"/>
+<rect x="76" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="92" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="108" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="124" y="120" width="12" height="150" rx="2" fill="#f0a04b" stroke="#d9822b" stroke-width="1.5"/>
+<rect x="140" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="156" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="172" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="188" y="120" width="12" height="150" rx="2" fill="#f0a04b" stroke="#d9822b" stroke-width="1.5"/>
+<rect x="204" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="220" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="236" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="252" y="120" width="12" height="150" rx="2" fill="#f0a04b" stroke="#d9822b" stroke-width="1.5"/>
+<rect x="268" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="284" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="300" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="316" y="120" width="12" height="150" rx="2" fill="#f0a04b" stroke="#d9822b" stroke-width="1.5"/>
+<rect x="332" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="348" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="364" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="380" y="120" width="12" height="150" rx="2" fill="#f0a04b" stroke="#d9822b" stroke-width="1.5"/>
+<rect x="396" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="412" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="428" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="444" y="120" width="12" height="150" rx="2" fill="#f0a04b" stroke="#d9822b" stroke-width="1.5"/>
+<rect x="460" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="476" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<rect x="492" y="120" width="12" height="150" rx="2" fill="#e9edf5" stroke="#c4ccda" stroke-width="1.5"/>
+<path d="M 66.0,286 L 66.0,294 L 130.0,294 L 130.0,286" fill="none" stroke="#d9822b" stroke-width="1.5"/>
+<text x="98.0" y="310" text-anchor="middle" font-size="11" fill="#b96a1e">stride ≈ D / 32</text>
+<text x="60" y="324" font-size="11" fill="#888">orange = sampled slices · gray = skipped</text>
+<path d="M 512,195.0 L 574,195.0" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/><rect x="421.0" y="80" width="146.0" height="15" rx="3" fill="#fff" opacity="0.9"/><text x="494" y="91" text-anchor="middle" font-size="10.5" fill="#333">np.linspace(0, D−1, 32)</text>
+<rect x="584" y="137.0" width="150" height="116" rx="8" fill="#FDEBD3" stroke="#d9822b" stroke-width="2"/><text x="659.0" y="157.0" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">32 strided slices</text><text x="659.0" y="175.0" text-anchor="middle" font-size="10.5" fill="#555">evenly spaced subset</text>
+<path d="M 734,195.0 L 794,195.0" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="804" y="112" width="300" height="200" rx="8" fill="#FCE3C8" stroke="#d98a3a" stroke-width="2"/><text x="954.0" y="132" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">Phase-1 proxy training</text><text x="954.0" y="150" text-anchor="middle" font-size="10.5" fill="#555">for each candidate LR  (8 epochs on the subset):</text><text x="954.0" y="164" text-anchor="middle" font-size="10.5" fill="#555">   train → measure proxy PSNR</text><text x="954.0" y="178" text-anchor="middle" font-size="10.5" fill="#555">LR grid: 1e-4 … 3e-3  (log-spaced, 10)</text>
+<rect x="822" y="206" width="60" height="22" rx="11" fill="#fff" stroke="#d98a3a"/>
+<text x="852" y="221" text-anchor="middle" font-size="10.5" fill="#a85d18">1e-4</text>
+<rect x="890" y="206" width="60" height="22" rx="11" fill="#fff" stroke="#d98a3a"/>
+<text x="920" y="221" text-anchor="middle" font-size="10.5" fill="#a85d18">3e-4</text>
+<rect x="958" y="206" width="60" height="22" rx="11" fill="#fff" stroke="#d98a3a"/>
+<text x="988" y="221" text-anchor="middle" font-size="10.5" fill="#a85d18">1e-3</text>
+<rect x="1026" y="206" width="60" height="22" rx="11" fill="#fff" stroke="#d98a3a"/>
+<text x="1056" y="221" text-anchor="middle" font-size="10.5" fill="#a85d18">3e-3</text>
+<text x="954" y="248" text-anchor="middle" font-size="10.5" fill="#a85d18">…</text>
+<path d="M 954,320 L 954,352" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="824" y="352" width="260" height="52" rx="8" fill="#D7EAD9" stroke="#3a9d4f" stroke-width="2"/><text x="954.0" y="372" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">best LR + best axis</text><text x="954.0" y="390" text-anchor="middle" font-size="10.5" fill="#555">lowest stable LR within tie band → Phase 2</text>
+</svg>

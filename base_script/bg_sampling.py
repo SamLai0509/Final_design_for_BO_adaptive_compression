@@ -91,6 +91,19 @@ def _gaussian_low_mid_high_split_t(x, sigma_low=0.08, sigma_mid=0.18):
     return x_low.type_as(x), x_mid.type_as(x), x_high.type_as(x)
 
 
+def _bg_full_slice_zlist(cfg, ep, step, depth, n, seed):
+    """z-indices for full-slice training, matching the square sampler's mode logic."""
+    mode = str(getattr(cfg, "bg_sample_mode", "random")).lower()
+    if mode in ("z_shard", "z_shards", "shard_parallel"):
+        chunk = max(depth // max(n, 1), 1); z_off = int(step) % chunk
+        return [(z_off + i * chunk) % depth for i in range(n)]
+    if mode in ("sequential", "all_slices", "deterministic"):
+        g = int(ep) * int(cfg.steps_per_epoch) + int(step)
+        return [(g + i) % depth for i in range(n)]
+    rng = np.random.default_rng(seed)
+    return [int(rng.integers(0, depth)) for _ in range(n)]
+
+
 def _sample_bg_training_batch(
     Xs_for_sampling,
     Xps,
@@ -140,6 +153,15 @@ def _sample_bg_training_batch(
             patch=patch,
             n=n,
         )
+
+    if bool(getattr(cfg, "bg_full_slice", False)):   # train on whole H x W planes (no crop)
+        nf = len(Xps)
+        zl = _bg_full_slice_zlist(cfg, ep, step, depth, n, seed)
+        xp = np.stack([np.stack([np.asarray(Xps[f][zi], np.float32) for f in range(nf)], 0) for zi in zl], 0)
+        x = np.stack([np.asarray(Xs_for_sampling[0][zi], np.float32)[None] for zi in zl], 0)
+        xp = np.nan_to_num(xp, nan=0.0); x = np.nan_to_num(x, nan=0.0)
+        zz = np.zeros(n, np.int64)
+        return {"xp": xp, "x": x, "z": np.asarray(zl, np.int64), "y0": zz, "x0": zz}
 
     if mode in ("z_shard", "z_shards", "shard_parallel"):
         chunk = max(depth // max(n, 1), 1)
@@ -195,6 +217,14 @@ def _sample_slice2d_gpu(Xs_gpu, Xps_gpu, cfg, ep, step, *, seed):
     mode = str(getattr(cfg, "bg_sample_mode", "random")).lower()
     n_fields = len(Xps_gpu)
     depth, height, width = Xps_gpu[0].shape
+    if bool(getattr(cfg, "bg_full_slice", False)):   # train on whole H x W planes (no crop)
+        dev = Xps_gpu[0].device
+        zl = _bg_full_slice_zlist(cfg, ep, step, depth, n, seed)
+        xp = torch.stack([torch.stack([Xps_gpu[f][zi] for f in range(n_fields)], 0) for zi in zl], 0).contiguous()
+        x_target = torch.stack([Xs_gpu[0][zi].unsqueeze(0) for zi in zl], 0).contiguous()
+        zt = torch.tensor(zl, dtype=torch.float32, device=dev)
+        zr = torch.zeros(n, dtype=torch.float32, device=dev)
+        return {"xp": xp, "x": x_target, "z": zt, "y0": zr, "x0": zr}
     y_max = max(height - patch + 1, 1)
     x_max = max(width - patch + 1, 1)
 
@@ -233,3 +263,38 @@ def _sample_slice2d_gpu(Xs_gpu, Xps_gpu, cfg, ep, step, *, seed):
     y0_t = torch.tensor(ys, dtype=torch.float32, device=dev)
     x0_t = torch.tensor(xs, dtype=torch.float32, device=dev)
     return {"xp": xp, "x": x_target, "z": z_t, "y0": y0_t, "x0": x0_t}
+
+
+def _sample_slab2d_gpu(Xs_gpu, Xps_gpu, cfg, ep, step, *, seed):
+    """Device-resident slab2d sampler: K stacked neighbor slices, field-major channels
+    [f0_z0..f0_z(K-1), f1_z0..], matching sample_bg_center_slabs_multifield bit-for-bit."""
+    n = int(cfg.bg_batch)
+    patch = int(cfg.bg_patch_size)
+    K = int(getattr(cfg, "bg_slab_k", 7)); half = K // 2
+    mode = str(getattr(cfg, "bg_sample_mode", "random")).lower()
+    n_fields = len(Xps_gpu)
+    depth, height, width = Xps_gpu[0].shape
+    y_max = max(height - patch + 1, 1)
+    x_max = max(width - patch + 1, 1)
+    if mode in ("sequential", "all_slices", "deterministic"):
+        gstep = int(ep) * int(cfg.steps_per_epoch) + int(step)
+        zcs = [int(min(max((gstep + i) % depth, half), depth - half - 1)) for i in range(n)]
+        ys = [0] * n; xs = [0] * n
+    else:  # random -- same draw order as sample_bg_center_slabs_multifield (zc, y0, x0)
+        rng = np.random.default_rng(seed)
+        zcs = [int(v) for v in rng.integers(half, depth - half, size=n)]
+        ys  = [int(v) for v in rng.integers(0, y_max, size=n)]
+        xs  = [int(v) for v in rng.integers(0, x_max, size=n)]
+    dev = Xps_gpu[0].device
+    xp = torch.empty((n, n_fields * K, patch, patch), dtype=torch.float32, device=dev)
+    x_target = torch.empty((n, 1, patch, patch), dtype=torch.float32, device=dev)
+    for i in range(n):
+        zc = int(min(max(zcs[i], half), depth - half - 1)); zi0 = zc - half
+        yi = int(ys[i]) % y_max; xi = int(xs[i]) % x_max
+        for f in range(n_fields):
+            xp[i, f * K:(f + 1) * K] = Xps_gpu[f][zi0:zi0 + K, yi:yi + patch, xi:xi + patch]
+        x_target[i, 0] = Xs_gpu[0][zc, yi:yi + patch, xi:xi + patch]
+    zc_t = torch.tensor(zcs, dtype=torch.float32, device=dev)
+    y0_t = torch.tensor(ys, dtype=torch.float32, device=dev)
+    x0_t = torch.tensor(xs, dtype=torch.float32, device=dev)
+    return {"xp": xp, "x": x_target, "z": zc_t, "zc": zc_t, "y0": y0_t, "x0": x0_t}

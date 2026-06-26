@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600" font-family="Helvetica,Arial,sans-serif">
+<defs><marker id="arr" markerWidth="11" markerHeight="11" refX="8.5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3 L0,6 z" fill="#555"/></marker></defs>
+<rect width="1200" height="600" fill="#ffffff"/>
+<text x="600.0" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#111">Micro-UNet backbone  (residual model)</text>
+<text x="600.0" y="56" text-anchor="middle" font-size="12.5" fill="#666">2-level encoder–decoder, channels = h throughout, 3×3 convs + GELU, skip-concat; then 4 parallel 1-ch heads</text>
+<rect x="31.0" y="150.0" width="78" height="120" rx="8" fill="#ECECEC" stroke="#777" stroke-width="2"/><text x="70.0" y="170.0" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1a1a">Input</text><text x="70.0" y="188.0" text-anchor="middle" font-size="10.5" fill="#555">n_fields × H×W</text>
+<rect x="151.0" y="150.0" width="78" height="120" rx="8" fill="#DCE9F7" stroke="#2c6fbf" stroke-width="2"/><text x="190.0" y="170.0" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">x1</text><text x="190.0" y="188.0" text-anchor="middle" font-size="10.5" fill="#555">h · H×W</text>
+<rect x="281.0" y="288.0" width="78" height="84" rx="8" fill="#DCE9F7" stroke="#2c6fbf" stroke-width="2"/><text x="320.0" y="308.0" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">x2</text><text x="320.0" y="326.0" text-anchor="middle" font-size="10.5" fill="#555">h · H/2</text>
+<rect x="411.0" y="414.0" width="78" height="52" rx="8" fill="#EAD9F5" stroke="#8e5bb5" stroke-width="2"/><text x="450.0" y="434.0" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1a1a">x3</text><text x="450.0" y="452.0" text-anchor="middle" font-size="10.5" fill="#555">h · H/4</text>
+<rect x="405.0" y="498.0" width="90" height="40" rx="8" fill="#EAD9F5" stroke="#8e5bb5" stroke-width="2"/><text x="450.0" y="518.0" text-anchor="middle" font-size="11" font-weight="700" fill="#1a1a1a">SE</text><text x="450.0" y="536.0" text-anchor="middle" font-size="10.5" fill="#555">(opt.)</text>
+<rect x="571.0" y="288.0" width="78" height="84" rx="8" fill="#D7EAD9" stroke="#3a9d4f" stroke-width="2"/><text x="610.0" y="308.0" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">u1</text><text x="610.0" y="326.0" text-anchor="middle" font-size="10.5" fill="#555">h · H/2</text>
+<rect x="701.0" y="150.0" width="78" height="120" rx="8" fill="#D7EAD9" stroke="#3a9d4f" stroke-width="2"/><text x="740.0" y="170.0" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">u2</text><text x="740.0" y="188.0" text-anchor="middle" font-size="10.5" fill="#555">h · H×W</text>
+<path d="M 130,210 L 151,210" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/><rect x="115.5" y="200.0" width="50.0" height="15" rx="3" fill="#fff" opacity="0.9"/><text x="140.5" y="211.0" text-anchor="middle" font-size="10.5" fill="#333">inc 3×3</text>
+<path d="M 229,250 L 283,300" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/><rect x="230.0" y="258" width="56.0" height="15" rx="3" fill="#fff" opacity="0.9"/><text x="258" y="269" text-anchor="middle" font-size="10.5" fill="#333">down1 ↓2</text>
+<path d="M 362,360 L 427,418" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/><rect x="365.0" y="375" width="56.0" height="15" rx="3" fill="#fff" opacity="0.9"/><text x="393" y="386" text-anchor="middle" font-size="10.5" fill="#333">down2 ↓2</text>
+<path d="M 450,466 L 450,473" fill="none" stroke="#8e5bb5" stroke-width="2" marker-end="url(#arr)"/>
+<path d="M 473,418 L 569,360" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/><rect x="498.0" y="372" width="44.0" height="15" rx="3" fill="#fff" opacity="0.9"/><text x="520" y="383" text-anchor="middle" font-size="10.5" fill="#333">up1 ↑2</text>
+<path d="M 652,300 L 681,250" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/><rect x="650.0" y="310" width="44.0" height="15" rx="3" fill="#fff" opacity="0.9"/><text x="672" y="321" text-anchor="middle" font-size="10.5" fill="#333">up2 ↑2</text>
+<path d="M 250,315 L 568,315" fill="none" stroke="#888" stroke-width="2" stroke-dasharray="6,5" marker-end="url(#arr)"/><rect x="367.0" y="305" width="86.0" height="15" rx="3" fill="#fff" opacity="0.9"/><text x="410" y="316" text-anchor="middle" font-size="10.5" fill="#333">skip · concat</text>
+<path d="M 250,144 L 680,144" fill="none" stroke="#888" stroke-width="2" stroke-dasharray="6,5" marker-end="url(#arr)"/><rect x="417.0" y="134" width="86.0" height="15" rx="3" fill="#fff" opacity="0.9"/><text x="460" y="145" text-anchor="middle" font-size="10.5" fill="#333">skip · concat</text>
+<path d="M 800,210 L 860,210" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/><rect x="802.0" y="200.0" width="56.0" height="15" rx="3" fill="#fff" opacity="0.9"/><text x="830.0" y="211.0" text-anchor="middle" font-size="10.5" fill="#333">outc 3×3</text>
+<rect x="900" y="105.0" width="120" height="42" rx="8" fill="#F6E7C2" stroke="#c79a3e" stroke-width="2"/><text x="960.0" y="131.0" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1a1a">out head</text>
+<path d="M 860,210 L 900,126.0" fill="none" stroke="#bbb" stroke-width="2" marker-end="url(#arr)"/>
+<path d="M 1020,126.0 L 1078,126.0" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/>
+<text x="1084" y="130.0" font-size="12.5" font-weight="700" fill="#333">R̂ (combined)</text>
+<rect x="900" y="161.0" width="120" height="42" rx="8" fill="#D7F0DA" stroke="#3a9d4f" stroke-width="2"/><text x="960.0" y="187.0" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1a1a">low head</text>
+<path d="M 860,210 L 900,182.0" fill="none" stroke="#bbb" stroke-width="2" marker-end="url(#arr)"/>
+<path d="M 1020,182.0 L 1078,182.0" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/>
+<text x="1084" y="186.0" font-size="12.5" font-weight="700" fill="#333">R_low</text>
+<rect x="900" y="217.0" width="120" height="42" rx="8" fill="#D6E6FA" stroke="#3a73c2" stroke-width="2"/><text x="960.0" y="243.0" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1a1a">mid head</text>
+<path d="M 860,210 L 900,238.0" fill="none" stroke="#bbb" stroke-width="2" marker-end="url(#arr)"/>
+<path d="M 1020,238.0 L 1078,238.0" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/>
+<text x="1084" y="242.0" font-size="12.5" font-weight="700" fill="#333">R_mid</text>
+<rect x="900" y="273.0" width="120" height="42" rx="8" fill="#F8DAD9" stroke="#c0463f" stroke-width="2"/><text x="960.0" y="299.0" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1a1a">high head</text>
+<path d="M 860,210 L 900,294.0" fill="none" stroke="#bbb" stroke-width="2" marker-end="url(#arr)"/>
+<path d="M 1020,294.0 L 1078,294.0" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arr)"/>
+<text x="1084" y="298.0" font-size="12.5" font-weight="700" fill="#333">R_high</text>
+<text x="960.0" y="93.0" text-anchor="middle" font-size="11.5" fill="#666">four 3×3 conv heads (each → 1 channel, zero-init)</text>
+<text x="990.0" y="341.0" text-anchor="middle" font-size="11.5" fill="#3a73c2">R_low+R_mid+R_high = R̂ (predicted residual)</text>
+</svg>

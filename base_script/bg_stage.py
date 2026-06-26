@@ -46,7 +46,7 @@ from bg_normalize import (
 )
 from bg_sampling import (
     _gaussian_low_high_split_t, _gaussian_low_mid_high_split_t,
-    _sample_bg_training_batch, _sample_slice2d_gpu, _to_gpu_volume,
+    _sample_bg_training_batch, _sample_slice2d_gpu, _sample_slab2d_gpu, _to_gpu_volume,
 )
 
 
@@ -306,7 +306,8 @@ def train_bg_only(
     seed = getattr(cfg, "seed", 42)
     set_deterministic_seed(seed)
     if torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = True          # autotune fixed-size convs
+        torch.backends.cudnn.benchmark = bool(getattr(cfg, "bg_cudnn_benchmark", True))   # autotune fixed-size convs
+        torch.backends.cudnn.deterministic = bool(getattr(cfg, "bg_cudnn_deterministic", False))
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 
@@ -446,7 +447,7 @@ def train_bg_only(
     gpu_sampling = False
     Xs_gpu = Xps_gpu = None
     _gpu_want = getattr(cfg, "bg_gpu_sampling", "auto")
-    if _bg_arch_kind(cfg) == "slice2d" and sampling_mask is None and _gpu_want is not False:
+    if _bg_arch_kind(cfg) in ("slice2d", "slab2d") and sampling_mask is None and _gpu_want is not False:
         _need = int(sum(a.size for a in Xs_for_sampling) + sum(a.size for a in Xps)) * 4
         if _gpu_want is True:
             _enable = True
@@ -494,7 +495,8 @@ def train_bg_only(
             step_seed = seed + ep * 10000 + step
 
             if gpu_sampling:
-                bg_dict = _sample_slice2d_gpu(Xs_gpu, Xps_gpu, cfg, ep, step, seed=step_seed)
+                _gpu_sampler = _sample_slab2d_gpu if _bg_arch_kind(cfg) == "slab2d" else _sample_slice2d_gpu
+                bg_dict = _gpu_sampler(Xs_gpu, Xps_gpu, cfg, ep, step, seed=step_seed)
             else:
                 bg_dict = _sample_bg_training_batch(
                     Xs_for_sampling,

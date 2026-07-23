@@ -251,10 +251,14 @@ class Micro_UNet_Backbone(nn.Module):
         x3 = self.se_bottleneck(x3)
 
         u1 = self.up1(x3)
+        if u1.shape[-2:] != x2.shape[-2:]:      # odd/non-power-of-2 spatial dims can break
+            u1 = F.interpolate(u1, size=x2.shape[-2:], mode="bilinear", align_corners=False)
         u1 = torch.cat([u1, x2], dim=1)
         u1 = self.act(self.up_conv1(u1))
 
         u2 = self.up2(u1)
+        if u2.shape[-2:] != x1.shape[-2:]:      # exact scale_factor=2 doubling
+            u2 = F.interpolate(u2, size=x1.shape[-2:], mode="bilinear", align_corners=False)
         u2 = torch.cat([u2, x1], dim=1)
         u2 = self.act(self.up_conv2(u2))
 

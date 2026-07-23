@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(/home/sam/miniconda3/bin/python -m pip install optuna-dashboard)",
+      "Bash(/home/sam/miniconda3/bin/optuna-dashboard --version)",
+      "Bash(ps -o etimes=,cputime=,%cpu= -p 1682940)",
+      "Bash(ps -o etimes= -p 1682940)",
+      "Bash(kill 1682940)",
+      "Bash(ps -o pid=,etimes=,%cpu= -p 1685325)",
+      "Bash(nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader)",
+      "Bash(nohup /home/sam/miniconda3/bin/python -u /tmp/claude-1006/-home-sam-Halo-Finder-Final-design/83fb4318-6938-48cf-ad2b-0c7160764444/scratchpad/test_neurlz.py)",
+      "Bash(echo \"PID $!\")",
+      "Bash(pdftoppm -png -r 85 pred_vs_residual_sperr_baryon_density.pdf /tmp/claude-1006/-home-sam-Halo-Finder-Final-design/83fb4318-6938-48cf-ad2b-0c7160764444/scratchpad/pvr)",
+      "Bash(grep -iA2 -B1 \"chunk\")",
+      "Bash(nohup /home/sam/miniconda3/bin/python -u /tmp/claude-1006/-home-sam-Halo-Finder-Final-design/83fb4318-6938-48cf-ad2b-0c7160764444/scratchpad/pred_vs_resid.py)",
+      "Bash(pdftoppm -png -r 85 pred_vs_residual_sperr_baryon_density.pdf /tmp/claude-1006/-home-sam-Halo-Finder-Final-design/83fb4318-6938-48cf-ad2b-0c7160764444/scratchpad/pvr2)"
+    ]
+  }
+}

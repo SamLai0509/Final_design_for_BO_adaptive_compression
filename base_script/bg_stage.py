@@ -352,10 +352,26 @@ def train_bg_only(
     if init_optimizer_state is not None:
         optimizer.load_state_dict(init_optimizer_state)
         
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer,
-        T_max=max(1, cfg.epochs * cfg.steps_per_epoch),
-    )
+    total_steps = max(1, cfg.epochs * cfg.steps_per_epoch)
+    warmup_steps = int(getattr(cfg, "bg_lr_warmup_steps", 200))
+    # Cap at 20% of the run so short BO-proxy trials (few epochs / steps) aren't
+    # all warmup with no room left for the cosine decay.
+    warmup_steps = max(0, min(warmup_steps, total_steps // 5))
+    if warmup_steps > 0:
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer,
+            schedulers=[
+                torch.optim.lr_scheduler.LinearLR(
+                    optimizer, start_factor=0.01, end_factor=1.0, total_iters=warmup_steps
+                ),
+                torch.optim.lr_scheduler.CosineAnnealingLR(
+                    optimizer, T_max=max(1, total_steps - warmup_steps)
+                ),
+            ],
+            milestones=[warmup_steps],
+        )
+    else:
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_steps)
     mse_loss = nn.MSELoss()
 
     # ---- AMP / BF16 switch (default: bf16 on) ----
@@ -422,6 +438,12 @@ def train_bg_only(
         f"epochs_cap={int(cfg.epochs)} | steps/epoch={int(cfg.steps_per_epoch)} | "
         f"patch={int(cfg.bg_patch_size)} | batch={int(cfg.bg_batch)} | "
         f"sample={_sample_mode} | data_parallel={_dp_flag} | amp={amp_str}"
+    )
+    print(
+        f"{_log_pfx}[lr-sched] warmup_steps={warmup_steps} (of {total_steps} total, "
+        f"cap=20%) -> cosine decay | freq_weight ramps linearly to "
+        f"{getattr(cfg, 'bg_freq_weight', 0.0)} over "
+        f"{int(getattr(cfg, 'bg_freq_warmup_epochs', 3))} epoch(s)"
     )
     # Diagnostic: print the early-stop config train_bg_only ACTUALLY received, so a
     # stale module / unset flag is obvious instead of silently running to budget.
@@ -563,7 +585,13 @@ def train_bg_only(
                 freq_focus = getattr(cfg, "bg_freq_focus", "low")
                 freq_boost = float(getattr(cfg, "bg_freq_boost", 1.0))
                 freq_warmup = int(getattr(cfg, "bg_freq_warmup_epochs", 3))
-                freq_weight = 0.0 if ep < freq_warmup else float(getattr(cfg, "bg_freq_weight", 0.0))
+                freq_target = float(getattr(cfg, "bg_freq_weight", 0.0))
+                _freq_warmup_steps = freq_warmup * cfg.steps_per_epoch
+                if _freq_warmup_steps <= 0:
+                    freq_weight = freq_target
+                else:
+                    _global_step = ep * cfg.steps_per_epoch + step
+                    freq_weight = min(1.0, _global_step / _freq_warmup_steps) * freq_target
 
                 loss_freq, _, _ = fft_mag_phase_loss_bg_t(
                     bg_pred,
@@ -727,12 +755,11 @@ def train_bg_only(
                             f"{min_slope:g} over last {es_window} epochs -> stop at epoch {ep + 1}"
                         )
             else:
-                # The frequency-loss term switches on at ep >= bg_freq_warmup_epochs,
-                # adding a new term so the TOTAL loss jumps ONCE (a change in loss
-                # *composition*, not divergence).  A slope/drop across that boundary
-                # always looks like a big positive jump -> false early-stop on every
-                # config.  So drop the pre-warmup epochs and judge only the
-                # composition-stable tail.
+                # The frequency-loss term ramps in linearly (per-step) over the first
+                # bg_freq_warmup_epochs epochs, so loss *composition* keeps shifting
+                # during the ramp (not divergence).  Judging slope/drop across that
+                # window can still look like a false positive -> drop the ramp epochs
+                # and judge only the composition-stable tail.
                 _fw = int(getattr(cfg, "bg_freq_warmup_epochs", 3))
                 _freq_on = float(getattr(cfg, "bg_freq_weight", 0.0)) > 0.0
                 vals = list(history["loss"])

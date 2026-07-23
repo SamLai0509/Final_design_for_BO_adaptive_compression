@@ -120,6 +120,18 @@ def fft_mag_phase_loss_bg_t(
 
     # --- Phase loss ----------------------------------------------------------------
     if float(phase_weight) > 0.0:
+        # The gradient of torch.angle(z) scales like 1/|z|**2, so it blows up to NaN
+        # for FFT coefficients whose magnitude is ~0. That happens on degenerate /
+        # near-constant patches (e.g. a dataset's constant guard planes, like WarpX
+        # Y=251..255): the model outputs a near-constant patch -> its spectrum has
+        # near-zero coefficients -> AngleBackward returns NaN -> the shared BG weights
+        # get poisoned on the first step and every slice reads NaN. Push each
+        # coefficient's magnitude to a small floor *along its own direction* so the
+        # phase is unchanged for real coefficients (|z| >> mag_floor) while the angle
+        # gradient stays finite where |z| -> 0. Only pred_f needs this (tgt_f carries
+        # no gradient).
+        mag_floor = 1e-4
+        pred_f = pred_f + pred_f / (pred_mag + 1e-20) * mag_floor
         pred_phase = torch.angle(pred_f)
         tgt_phase = torch.angle(tgt_f)
         # Wrap the phase difference into (-pi, pi] via atan2(sin, cos) so that e.g.

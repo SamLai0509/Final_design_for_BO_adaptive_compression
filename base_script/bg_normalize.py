@@ -19,21 +19,10 @@ from frequency_losses import fft_mag_phase_loss_bg_t, masked_fft_mag_l1_t, maske
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
-from Patch_data import (
-    sample_bg_patches_multifield,
-    sample_bg_center_slabs_multifield,
-    sample_bg_slices_at_indices_multifield,
-    sample_bg_center_slab_at_z_multifield,
-    sample_bg_volume_slab_at_z_multifield,
-)
 
 
 def _bg_arch_kind(cfg):
-    arch = str(getattr(cfg, "bg_arch", "spatial")).lower()
-    if arch in ("res3d_unet", "res3d"):
-        return "res3d"
-    if arch in ("slab2d", "slab2d_unet", "slab_2d"):
-        return "slab2d"
+    """Only the 2-D slice model remains (the slab / 3-D variants were removed)."""
     return "slice2d"
 
 
@@ -150,30 +139,4 @@ def denormalize_bg_residual_tensor(pred_norm, cfg, revin_mu=None, revin_sig=None
 
 
 def _normalize_bg_batch(bg_xs_t, cfg, mean_t, std_t, min_t, max_t):
-    kind = _bg_arch_kind(cfg)
-    if kind == "res3d":
-        # [B, F, K, H, W]: same per-field stats across K (do not flatten F*K)
-        mean5 = mean_t.unsqueeze(2)
-        std5 = std_t.unsqueeze(2)
-        min5 = min_t.unsqueeze(2)
-        max5 = max_t.unsqueeze(2)
-        mode = _bg_norm_mode(cfg)
-        eps = _bg_norm_eps(cfg)
-        if mode == "zscore":
-            return (bg_xs_t - mean5) / std5
-        if mode in ("minmax01", "minmax_01", "mm01"):
-            return (bg_xs_t - min5) / (max5 - min5 + eps)
-        if mode in ("minmax11", "minmax_11", "mm11"):
-            mm = (bg_xs_t - min5) / (max5 - min5 + eps)
-            return 2.0 * mm - 1.0
-        raise ValueError(f"Unknown bg_field_norm: {mode}")
-    if kind == "slab2d":
-        k = int(getattr(cfg, "bg_slab_k", 7))
-        mean_s = mean_t.repeat_interleave(k, dim=1)
-        std_s = std_t.repeat_interleave(k, dim=1)
-        min_s = min_t.repeat_interleave(k, dim=1)
-        max_s = max_t.repeat_interleave(k, dim=1)
-        return normalize_bg_inputs(bg_xs_t, cfg, mean_s, std_s, min_s, max_s)
     return normalize_bg_inputs(bg_xs_t, cfg, mean_t, std_t, min_t, max_t)
-
-

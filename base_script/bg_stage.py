@@ -24,6 +24,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 
 from config_io import _error_bounded_post_process, set_deterministic_seed
@@ -32,12 +33,6 @@ from frequency_losses import fft_mag_phase_loss_bg_t, masked_fft_mag_l1_t, maske
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
-from Patch_data import (
-    sample_bg_patches_multifield,
-    sample_bg_center_slabs_multifield,
-    sample_bg_slices_at_indices_multifield,
-    sample_bg_center_slab_at_z_multifield,
-)
 
 from bg_normalize import (
     _bg_arch_kind, _bg_norm_mode, _bg_norm_eps, _bg_input_norm_mode, _bg_residual_norm_mode,
@@ -45,8 +40,7 @@ from bg_normalize import (
     denormalize_bg_residual_tensor, _normalize_bg_batch,
 )
 from bg_sampling import (
-    _gaussian_low_high_split_t, _gaussian_low_mid_high_split_t,
-    _sample_bg_training_batch, _sample_slice2d_gpu, _sample_slab2d_gpu, _to_gpu_volume,
+    _gaussian_low_mid_high_split_t, _sample_bg_training_batch, _sample_slice2d_gpu, _to_gpu_volume,
 )
 
 
@@ -77,28 +71,21 @@ def unwrap_bg_model(model):
 
 
 class _BGTrainParallelAdapter(nn.Module):
-    """Thin wrapper so nn.DataParallel can run bg_forward_split on batch dim 0."""
+    """Thin wrapper so nn.DataParallel / DDP can scatter the batch over GPUs and gather the
+    four outputs (full residual + low/mid/high bands) back on batch dim 0."""
 
     def __init__(self, core, split_mode=None):
         super().__init__()
         self.core = core
         self.split_mode = split_mode
 
-    def forward(self, xp_norm, z_idx, y0, x0, rel_err_scalar):
-        rel = float(rel_err_scalar.reshape(-1)[0].item())
+    def forward(self, xp_norm):
         if self.split_mode == "three":
-            pred_low, pred_mid, pred_high, pred = self.core.bg_forward_split(
-                xp_norm,
-                z_idx,
-                y0,
-                x0,
-                rel_err=rel,
-            )
+            pred_low, pred_mid, pred_high, pred = self.core.bg_forward_split(xp_norm)
             return pred, pred_low, pred_mid, pred_high
-        else:
-            pred = self.core.bg_forward(xp_norm, z_idx, y0, x0, rel_err=rel)
-            empty = xp_norm.new_empty(0)
-            return pred, empty, empty, empty
+        pred = self.core.bg_forward(xp_norm)
+        empty = xp_norm.new_empty(0)
+        return pred, empty, empty, empty
 
 
 def _maybe_wrap_dataparallel(model, cfg, device):
@@ -106,7 +93,7 @@ def _maybe_wrap_dataparallel(model, cfg, device):
     use_ddp = bool(getattr(cfg, "bg_ddp", False))
     n_gpu = int(torch.cuda.device_count()) if torch.cuda.is_available() else 0
     split_mode = getattr(cfg, "bg_split_mode", None)
-    
+
     if use_ddp:
         local_rank = int(os.environ.get("LOCAL_RANK", 0))
         adapter = _BGTrainParallelAdapter(model, split_mode).to(device)
@@ -122,39 +109,21 @@ def _maybe_wrap_dataparallel(model, cfg, device):
     if int(cfg.bg_batch) < n_dp:
         cfg.bg_batch = int(n_dp)
     adapter = _BGTrainParallelAdapter(model, split_mode).to(device)
-    device_ids = list(range(n_dp))
-    dp_model = nn.DataParallel(adapter, device_ids=device_ids)
+    dp_model = nn.DataParallel(adapter, device_ids=list(range(n_dp)))
     return dp_model, True
 
 
-def _forward_bg_outputs(model, x_norm, z_idx, y0, x0, split_mode=None, rel_err=None):
+def _forward_bg_outputs(model, x_norm, split_mode=None):
+    """Run the (possibly DataParallel/DDP-wrapped) model; returns the full residual and,
+    with the three-band split, the per-band predictions."""
     if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
-        rel_t = torch.full(
-            (x_norm.shape[0],),
-            float(rel_err if rel_err is not None else 0.0),
-            device=x_norm.device,
-            dtype=x_norm.dtype,
-        )
-        pred, pred_low, pred_mid, pred_high = model(x_norm, z_idx, y0, x0, rel_t)
+        pred, pred_low, pred_mid, pred_high = model(x_norm)
         return {"pred": pred, "low": pred_low, "mid": pred_mid, "high": pred_high}
-
     core = unwrap_bg_model(model)
-
     if split_mode == "three":
-        pred_low, pred_mid, pred_high, pred = core.bg_forward_split(
-            x_norm, z_idx, y0, x0, rel_err=rel_err
-        )
+        pred_low, pred_mid, pred_high, pred = core.bg_forward_split(x_norm)
         return {"pred": pred, "low": pred_low, "mid": pred_mid, "high": pred_high}
-
-    elif split_mode == "two":
-        pred_low, pred_high, pred = core.bg_forward_split(
-            x_norm, z_idx, y0, x0, rel_err=rel_err
-        )
-        return {"pred": pred, "low": pred_low, "mid": None, "high": pred_high}
-
-    else:
-        pred = core.bg_forward(x_norm, z_idx, y0, x0, rel_err=rel_err)
-        return {"pred": pred, "low": None, "mid": None, "high": None}
+    return {"pred": core.bg_forward(x_norm), "low": None, "mid": None, "high": None}
 
 
 def run_bg_inference(
@@ -193,9 +162,6 @@ def run_bg_inference(
         z_hi = z_lo
     n_fields = len(Xps)
     patch = int(cfg.bg_patch_size)
-    k_slab = int(getattr(cfg, "bg_slab_k", 7))
-    half = k_slab // 2
-    arch_kind = _bg_arch_kind(cfg)
 
     ai_contribution = np.zeros_like(lq_target, dtype=np.float32)
 
@@ -206,31 +172,10 @@ def run_bg_inference(
             y0 = 0
             x0 = 0
 
-            if arch_kind == "slab2d":
-                zc = int(np.clip(z, half, depth - half - 1))
-                slab_np = sample_bg_center_slab_at_z_multifield(
-                    Xs, Xps, z_center=zc, K=k_slab, patch=patch, y0=y0, x0=x0, n=1
-                )["xp"]
-                slab_t = torch.from_numpy(slab_np).to(model_device)
-                slab_norm = _normalize_bg_batch(slab_t, cfg, mean_t, std_t, min_t, max_t)
-                pred_norm = model.bg_forward(
-                    slab_norm,
-                    torch.tensor([zc], device=model_device).float(),
-                    torch.tensor([0], device=model_device).float(),
-                    torch.tensor([0], device=model_device).float(),
-                    rel_err=rel_err,
-                )
-            else:
-                slice_data = np.stack([field[z] for field in Xps], axis=0).astype(np.float32)
-                slice_t = torch.from_numpy(slice_data).unsqueeze(0).to(model_device)
-                slice_norm = normalize_bg_inputs(slice_t, cfg, mean_t, std_t, min_t, max_t)
-                pred_norm = model.bg_forward(
-                    slice_norm,
-                    torch.tensor([z], device=model_device).float(),
-                    torch.tensor([0], device=model_device).float(),
-                    torch.tensor([0], device=model_device).float(),
-                    rel_err=rel_err,
-                )
+            slice_data = np.stack([field[z] for field in Xps], axis=0).astype(np.float32)
+            slice_t = torch.from_numpy(slice_data).unsqueeze(0).to(model_device)
+            slice_norm = normalize_bg_inputs(slice_t, cfg, mean_t, std_t, min_t, max_t)
+            pred_norm = model.bg_forward(slice_norm)
 
             if _bg_residual_norm_mode(cfg) == "revin_slice":
                 res_raw = torch.from_numpy(
@@ -266,43 +211,32 @@ def run_bg_inference(
     return x_hat_raw
 
 
-def train_bg_only(
-    Xs,
-    Xps,
-    device,
-    cfg,
-    evaluator=None,
-    init_state_dict=None,
-    init_optimizer_state=None,
-):
-    """Train the BG residual model on one (Xs, Xps) pair.
+def train_bg_only(Xs, Xps, device, cfg, evaluator=None):
+    """Train the residual model on one (Xs, Xps) pair.
 
     Args:
-        Xs:  ``[target_field]`` (+ optional aux fields), each ``(D, H, W)`` ground truth.
-        Xps: ``[base_recon]`` (+ the same aux fields).  ``base_recon`` is the lossy
-             reconstruction the model refines; ``n_fields = len(Xps)``.
+        Xs:  ``[target_field]`` (+ aux fields), each ``(D, H, W)`` ground truth.
+        Xps: ``[base_recon]`` (+ the same aux fields); ``n_fields = len(Xps)``.
         device, cfg: torch device and a ``TrainConfig`` (see ``build_bg_only_cfg``).
-        evaluator: optional ``callable(model) -> (psnr, ...)`` run at each epoch end;
-            the best-PSNR weights are restored before returning.
-        init_state_dict / init_optimizer_state: optional warm starts.
+        evaluator: optional ``callable(model) -> psnr | (psnr, max_err)`` run at every
+            epoch end; the best-PSNR weights are restored before returning.
 
-    Trains slice-by-slice (each depth slice is one 2-D patch) under a wall-clock budget
-    (``cfg.max_train_time``) and an epoch cap (``cfg.epochs``), in bf16 AMP.  The loss is
-    the spatial residual loss + the frequency loss (enabled after
-    ``cfg.bg_freq_warmup_epochs``) + optional split-band terms.  An opt-in
-    slope/patience early-stop (``cfg.bg_early_stop``) can end training once the loss
-    flattens.
+    Trains on whole 2-D slices under a wall-clock budget (``cfg.max_train_time``) and an
+    epoch cap (``cfg.epochs``) in bf16 AMP. Loss = spatial MSE + ramped dual-domain
+    frequency loss + (with ``bg_split_mode="three"``) the per-band MSEs. The cosine
+    schedule is re-planned once the real epoch/step cost is known (opt-in
+    ``bg_sched_time_calibrate`` / ``bg_sched_step_calibrate``). An opt-in early stop
+    (``cfg.bg_early_stop``) halts when the epoch loss improves by less than
+    ``bg_es_min_drop`` (default 2%) for ``bg_es_patience`` (default 2) consecutive
+    epochs; it is disabled in all reported experiments.
 
-    Returns:
-        (model, history) — ``model`` carries the best-PSNR weights; ``history`` holds
-        per-epoch loss / psnr / time lists.
+    Returns ``(model, history)``: ``model`` carries the best-PSNR weights (or the final
+    weights without an evaluator); ``history`` holds per-epoch loss / psnr / time lists.
     """
     from siren_fft_backbone_model import UNET_Model
 
     split_mode = getattr(cfg, "bg_split_mode", None)
-    use_split_bands = split_mode in {"two", "three"}
-    use_three_bands = split_mode == "three"
-
+    use_split_bands = split_mode == "three"
     seed = getattr(cfg, "seed", 42)
     set_deterministic_seed(seed)
     if torch.cuda.is_available():
@@ -311,165 +245,94 @@ def train_bg_only(
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 
-    n_fields = len(Xps)
-    depth, height, width = Xs[0].shape
+    _pfx = (str(getattr(cfg, "bg_log_prefix", "") or "").strip() + " ") if str(getattr(cfg, "bg_log_prefix", "") or "").strip() else ""
 
-    true_residuals = Xs[0] - Xps[0]
-    Xs_for_sampling = [true_residuals] + Xs[1:]
-    # Pull any disk-backed memmap fields into RAM once, so per-step patch sampling
-    # doesn't trigger random disk reads every step (a major batch=1 bottleneck).
+    n_fields = len(Xps)
+    # Sampling volumes: the residual replaces the target; memmaps are pulled into RAM once
+    # so per-step slicing never hits the disk.
     _ram = lambda a: np.array(a) if isinstance(a, np.memmap) else a
-    Xs_for_sampling = [_ram(a) for a in Xs_for_sampling]
+    Xs_for_sampling = [_ram(Xs[0] - Xps[0])] + [_ram(a) for a in Xs[1:]]
     Xps = [_ram(a) for a in Xps]
 
     model = UNET_Model(
         n_fields=n_fields,
-        K=7,
-        D=depth,
-        H=height,
-        W=width,
         bg_hidden=cfg.bg_h,
-        bg_arch=getattr(cfg, "bg_arch", "spatial"),
         bg_split_bands=bool(getattr(cfg, "bg_split_bands", False)),
-        bg_split_mode=getattr(cfg, "bg_split_mode", None),
-        bg_use_se=bool(getattr(cfg, "bg_use_se", False)),
-        bg_se_reduction=int(getattr(cfg, "bg_se_reduction", 4)),
-        bg_feat_attn=bool(getattr(cfg, "bg_feat_attn", False)),
-        bg_low_adapter=bool(getattr(cfg, "bg_low_adapter", False)),
-        bg_mid_adapter=bool(getattr(cfg, "bg_mid_adapter", False)),
-        bg_high_adapter=bool(getattr(cfg, "bg_high_adapter", False)),
-        bg_slab_k=int(getattr(cfg, "bg_slab_k", 7)),
+        bg_split_mode=split_mode,
     ).to(device)
+    model, _ = _maybe_wrap_dataparallel(model, cfg, device)
 
-    if init_state_dict is not None:
-        model.load_state_dict(init_state_dict, strict=True)
-
-    model, _dp_wrapped = _maybe_wrap_dataparallel(model, cfg, device)
-
-    trainable_params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.Adam(trainable_params, lr=cfg.lr)
-    
-    if init_optimizer_state is not None:
-        optimizer.load_state_dict(init_optimizer_state)
-        
+    optimizer = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr=cfg.lr)
     total_steps = max(1, cfg.epochs * cfg.steps_per_epoch)
-    warmup_steps = int(getattr(cfg, "bg_lr_warmup_steps", 200))
-    # Cap at 20% of the run so short BO-proxy trials (few epochs / steps) aren't
-    # all warmup with no room left for the cosine decay.
-    warmup_steps = max(0, min(warmup_steps, total_steps // 5))
+    # Linear warmup capped at 20% of the run (short BO-proxy trials must keep room for
+    # the cosine decay), then cosine to 0.
+    warmup_steps = max(0, min(int(getattr(cfg, "bg_lr_warmup_steps", 200)), total_steps // 5))
     if warmup_steps > 0:
         scheduler = torch.optim.lr_scheduler.SequentialLR(
             optimizer,
-            schedulers=[
-                torch.optim.lr_scheduler.LinearLR(
-                    optimizer, start_factor=0.01, end_factor=1.0, total_iters=warmup_steps
-                ),
-                torch.optim.lr_scheduler.CosineAnnealingLR(
-                    optimizer, T_max=max(1, total_steps - warmup_steps)
-                ),
-            ],
+            schedulers=[torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.01, end_factor=1.0, total_iters=warmup_steps),
+                        torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, total_steps - warmup_steps))],
             milestones=[warmup_steps],
         )
     else:
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_steps)
     mse_loss = nn.MSELoss()
 
-    # ---- AMP / BF16 switch (default: bf16 on) ----
+    # ---- AMP (default bf16; cfg.amp=False -> fp32) ----
     use_amp = bool(getattr(cfg, "amp", True))
     amp_dtype = str(getattr(cfg, "amp_dtype", "bf16")).lower()
-    if use_amp and amp_dtype in ("bf16", "bfloat16"):
-        autocast_dtype = torch.bfloat16
-    elif use_amp and amp_dtype in ("fp16", "float16"):
-        autocast_dtype = torch.float16
-    else:
-        use_amp = False
-        autocast_dtype = torch.float32  # placeholder
+    autocast_dtype = torch.bfloat16 if amp_dtype in ("bf16", "bfloat16") else torch.float16
+    if not use_amp:
+        autocast_dtype = torch.float32
 
-    sampling_mask = getattr(cfg, "bg_sampling_mask", None)
-    sampling_min_frac = float(getattr(cfg, "bg_sampling_min_frac", 0.0))
+    history = {"epoch": [], "loss": [], "psnr": [], "time": [], "max_err": [], "epoch_wall": [], "total_steps": 0}
 
-    history = {
-        "epoch": [],
-        "loss": [],
-        "psnr": [],
-        "time": [],
-        "max_err": [],
-        "epoch_wall": [],
-    }
+    # Replay support: the sampler seed is a pure function of (epoch, step), so re-running
+    # the same number of steps reproduces a wall-clock-cut run exactly (cfg.bg_max_steps).
+    _max_steps = getattr(cfg, "bg_max_steps", None)
+    _max_steps = int(_max_steps) if _max_steps is not None else None
+    _steps_done = 0
 
-    best_model_weights = None
-    best_psnr = -float("inf")
+    def _evaluate():
+        res = evaluator(unwrap_bg_model(model))
+        if isinstance(res, tuple):
+            return float(res[0]), (res[1] if len(res) >= 2 else None)
+        return float(res), None
 
-    _log_pfx = str(getattr(cfg, "bg_log_prefix", "") or "").strip()
-    if _log_pfx:
-        _log_pfx = _log_pfx + " "
-
+    best_psnr, best_weights = -float("inf"), None
     if evaluator is not None:
-        base_eval_res = evaluator(unwrap_bg_model(model))
-        if isinstance(base_eval_res, tuple):
-            if len(base_eval_res) >= 2:
-                base_psnr, base_max_err = base_eval_res[:2]
-            else:
-                base_psnr = base_eval_res[0]
-                base_max_err = None
-        else:
-            base_psnr = base_eval_res
-            base_max_err = None
-
-        history["psnr"].append((0, base_psnr))
-        history["time"].append(0.0)
-        history["epoch"].append(0)
+        best_psnr, base_max_err = _evaluate()
+        best_weights = copy.deepcopy(unwrap_bg_model(model).state_dict())
+        history["epoch"].append(0); history["psnr"].append((0, best_psnr)); history["time"].append(0.0)
         if base_max_err is not None:
             history["max_err"].append(base_max_err)
-
-        best_psnr = base_psnr
-        best_model_weights = copy.deepcopy(unwrap_bg_model(model).state_dict())
-
-        err_str = f"{base_max_err:.1f}" if base_max_err is not None else "N/A"
-        print(f"{_log_pfx}[Init] Epoch   0 | Global PSNR: {base_psnr:.2f} dB | MaxErr: {err_str}")
+        print(f"{_pfx}[Init] Epoch   0 | Global PSNR: {best_psnr:.2f} dB | MaxErr: "
+              f"{base_max_err:.1f}" if base_max_err is not None else f"{_pfx}[Init] Epoch   0 | Global PSNR: {best_psnr:.2f} dB")
     else:
-        print(f"{_log_pfx}[Init] evaluator=None, train only without PSNR tracking.")
+        print(f"{_pfx}[Init] evaluator=None, train only without PSNR tracking.")
 
     amp_str = "off" if not use_amp else ("bf16" if autocast_dtype is torch.bfloat16 else "fp16")
-    _sample_mode = str(getattr(cfg, "bg_sample_mode", "random")).lower()
     _dp_flag = bool(getattr(cfg, "bg_data_parallel", False)) and torch.cuda.device_count() > 1
-    print(
-        f"{_log_pfx}[plan] pure_train_budget={float(cfg.max_train_time):.2f}s | "
-        f"epochs_cap={int(cfg.epochs)} | steps/epoch={int(cfg.steps_per_epoch)} | "
-        f"patch={int(cfg.bg_patch_size)} | batch={int(cfg.bg_batch)} | "
-        f"sample={_sample_mode} | data_parallel={_dp_flag} | amp={amp_str}"
-    )
-    print(
-        f"{_log_pfx}[lr-sched] warmup_steps={warmup_steps} (of {total_steps} total, "
-        f"cap=20%) -> cosine decay | freq_weight ramps linearly to "
-        f"{getattr(cfg, 'bg_freq_weight', 0.0)} over "
-        f"{int(getattr(cfg, 'bg_freq_warmup_epochs', 3))} epoch(s)"
-    )
-    # Diagnostic: print the early-stop config train_bg_only ACTUALLY received, so a
-    # stale module / unset flag is obvious instead of silently running to budget.
-    if bool(getattr(cfg, "bg_early_stop", False)):
-        print(
-            f"{_log_pfx}[early-stop] ENABLED v2 | metric={getattr(cfg, 'bg_es_metric', '?')} "
-            f"| min_drop={getattr(cfg, 'bg_es_min_drop', '?')} patience={getattr(cfg, 'bg_es_patience', '?')} "
-            f"| freq_warmup={getattr(cfg, 'bg_freq_warmup_epochs', 3)} freq_weight={getattr(cfg, 'bg_freq_weight', 0.0)}"
-        )
-    else:
-        print(f"{_log_pfx}[early-stop] DISABLED (cfg.bg_early_stop is False/unset)")
+    print(f"{_pfx}[plan] pure_train_budget={float(cfg.max_train_time):.2f}s | epochs_cap={int(cfg.epochs)} | "
+          f"steps/epoch={int(cfg.steps_per_epoch)} | patch={int(cfg.bg_patch_size)} | batch={int(cfg.bg_batch)} | "
+          f"sample={str(getattr(cfg, 'bg_sample_mode', 'random')).lower()} | data_parallel={_dp_flag} | amp={amp_str}")
+    print(f"{_pfx}[lr-sched] warmup_steps={warmup_steps} (of {total_steps} total, cap=20%) -> cosine decay | "
+          f"freq_weight ramps linearly to {getattr(cfg, 'bg_freq_weight', 0.0)} over "
+          f"{int(getattr(cfg, 'bg_freq_warmup_epochs', 3))} epoch(s)")
+    early_stop = bool(getattr(cfg, "bg_early_stop", False))
+    print(f"{_pfx}[early-stop] " + (f"ENABLED | min_drop={getattr(cfg, 'bg_es_min_drop', 0.02)} patience={getattr(cfg, 'bg_es_patience', 2)}"
+                                    if early_stop else "DISABLED (cfg.bg_early_stop is False/unset)"))
 
     t_start_train = time.perf_counter()
     eval_time_total = 0.0
     stop_training = False
-
     mean_t, std_t, min_t, max_t = _build_input_norm_tensors(cfg, device, n_fields)
 
-    # ---- Optional device-resident sampling (kills per-step disk / CPU / transfer) ----
-    # Keep the sampling volumes on `device` and slice patches there; identical indices
-    # -> identical patches. Auto-on for the slice2d / no-mask case when it fits in VRAM;
-    # force with cfg.bg_gpu_sampling = True / disable with False.
+    # ---- Device-resident sampling (auto when the volumes fit in 60% of free VRAM) ----
     gpu_sampling = False
     Xs_gpu = Xps_gpu = None
     _gpu_want = getattr(cfg, "bg_gpu_sampling", "auto")
-    if _bg_arch_kind(cfg) in ("slice2d", "slab2d") and sampling_mask is None and _gpu_want is not False:
+    if _gpu_want is not False:
         _need = int(sum(a.size for a in Xs_for_sampling) + sum(a.size for a in Xps)) * 4
         if _gpu_want is True:
             _enable = True
@@ -485,348 +348,168 @@ def train_bg_only(
             Xs_gpu = [_to_gpu_volume(a, device) for a in Xs_for_sampling]
             Xps_gpu = [_to_gpu_volume(a, device) for a in Xps]
             gpu_sampling = True
-            print(f"{_log_pfx}[gpu-sampling] {len(Xps_gpu)} fields resident on {device} (~{_need/1e9:.1f} GB)")
+            print(f"{_pfx}[gpu-sampling] {len(Xps_gpu)} fields resident on {device} (~{_need/1e9:.1f} GB)")
+
+    # Step-level schedule calibration (opt-in): armed only when one epoch could outlast the budget.
+    _step_calib = ({"k0": 32, "k1": 96, "t0": None}
+                   if (bool(getattr(cfg, "bg_sched_step_calibrate", False))
+                       and float(cfg.max_train_time) < 1e8 and int(cfg.steps_per_epoch) > 96) else None)
+
+    freq_focus = getattr(cfg, "bg_freq_focus", "low")
+    freq_boost = float(getattr(cfg, "bg_freq_boost", 1.0))
+    freq_target = float(getattr(cfg, "bg_freq_weight", 0.0))
+    freq_warmup_steps = int(getattr(cfg, "bg_freq_warmup_epochs", 3)) * cfg.steps_per_epoch
+    phase_weight = float(getattr(cfg, "bg_fft_phase_weight", 1.0))
+    band_w = (float(getattr(cfg, "bg_low_weight", 0.2)), float(getattr(cfg, "bg_mid_weight", 0.5)), float(getattr(cfg, "bg_high_weight", 1.0)))
+    sigma_low, sigma_mid = float(getattr(cfg, "bg_sigma_low", 0.08)), float(getattr(cfg, "bg_sigma_mid", 0.18))
 
     for ep in range(cfg.epochs):
         if stop_training:
             break
 
+        # Epoch-level schedule calibration (opt-in): with a wall-clock budget the epoch cap
+        # is huge, so the initial cosine never decays. After epochs 1 and 2 (warmup-inflated,
+        # then steady-state) re-plan the cosine over the steps that fit the remaining budget;
+        # LambdaLR starts at the current lr factor and clamps at 0 past its horizon.
+        if (ep in (1, 2) and bool(getattr(cfg, "bg_sched_time_calibrate", False))
+                and float(cfg.max_train_time) < 1e8 and len(history["epoch_wall"]) >= ep):
+            _eN = float(history["epoch_wall"][ep - 1])
+            if _eN > 0:
+                _rem_sec = max(0.0, float(cfg.max_train_time) - float(sum(history["epoch_wall"][:ep])))
+                _rem_steps = max(1, int(_rem_sec / _eN * cfg.steps_per_epoch))
+                _f0 = float(optimizer.param_groups[0]["lr"]) / max(float(cfg.lr), 1e-12)
+                scheduler = torch.optim.lr_scheduler.LambdaLR(
+                    optimizer, lr_lambda=lambda t, T=_rem_steps, f0=_f0: f0 * 0.5 * (1.0 + math.cos(math.pi * min(t, T) / T)))
+                print(f"{_pfx}[lr-sched] time-budget calibration@ep{ep}: epoch={_eN:.2f}s -> cosine {_f0:.2f}->0 "
+                      f"over ~{_rem_steps} steps ({_rem_sec:.1f}s of {float(cfg.max_train_time):.1f}s budget)")
+
         epoch_start = time.perf_counter()
         model.train()
-        epoch_losses = []
-        epoch_freq_losses = []
-        epoch_low_losses = []
-        epoch_mid_losses = []
-        epoch_high_losses = []
+        ep_loss, ep_freq, ep_low, ep_mid, ep_high = [], [], [], [], []
 
         for step in range(cfg.steps_per_epoch):
-            current_pure_time = time.perf_counter() - t_start_train - eval_time_total
-            
-            stop_flag = int(current_pure_time >= cfg.max_train_time)
+            pure_time = time.perf_counter() - t_start_train - eval_time_total
+            stop_flag = int(pure_time >= cfg.max_train_time or (_max_steps is not None and _steps_done >= _max_steps))
             if getattr(cfg, "bg_ddp", False):
                 import torch.distributed as dist
                 if dist.is_initialized():
                     t_flag = torch.tensor([stop_flag], device=device, dtype=torch.int32)
                     dist.all_reduce(t_flag, op=dist.ReduceOp.MAX)
-                    stop_flag = t_flag.item()
-                    
-            if stop_flag > 0:
+                    stop_flag = int(t_flag.item())
+            if stop_flag:
                 stop_training = True
                 break
-
+            _steps_done += 1
             step_seed = seed + ep * 10000 + step
 
+            # Step-level calibration: probe the steady-state step cost early in epoch 0; if one
+            # epoch would eat >80% of the budget, plan the remaining warmup + cosine over the
+            # steps that actually fit (QMCPack: 33,120 slices/epoch at a 54 s budget).
+            if _step_calib is not None and ep == 0:
+                if step == _step_calib["k0"]:
+                    _step_calib["t0"] = pure_time
+                elif step == _step_calib["k1"] and _step_calib["t0"] is not None:
+                    _dt = (pure_time - _step_calib["t0"]) / float(_step_calib["k1"] - _step_calib["k0"])
+                    _proj = _dt * float(cfg.steps_per_epoch)
+                    if _dt > 0 and _proj > 0.8 * float(cfg.max_train_time):
+                        _rem_steps = max(1, int((float(cfg.max_train_time) - pure_time) / _dt))
+                        _wu = max(0, int(warmup_steps) - int(step))
+                        _T = max(1, _rem_steps - _wu)
+                        _f0 = float(optimizer.param_groups[0]["lr"]) / max(float(cfg.lr), 1e-12)
+                        def _lam(t, f0=_f0, wu=_wu, T=_T):
+                            if t < wu:
+                                return f0 + (1.0 - f0) * (t / float(wu))
+                            return 0.5 * (1.0 + math.cos(math.pi * min(t - wu, T) / T))
+                        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=_lam)
+                        print(f"{_pfx}[lr-sched] step-budget calibration@step{step}: {_dt*1e3:.2f} ms/step -> one epoch ≈ "
+                              f"{_proj:.1f}s of a {float(cfg.max_train_time):.1f}s budget; warmup {_f0:.2f}->1 over {_wu} steps, "
+                              f"then cosine 1->0 over ~{_T} steps")
+                    _step_calib = None
+
             if gpu_sampling:
-                _gpu_sampler = _sample_slab2d_gpu if _bg_arch_kind(cfg) == "slab2d" else _sample_slice2d_gpu
-                bg_dict = _gpu_sampler(Xs_gpu, Xps_gpu, cfg, ep, step, seed=step_seed)
+                batch = _sample_slice2d_gpu(Xs_gpu, Xps_gpu, cfg, ep, step, seed=step_seed)
             else:
-                bg_dict = _sample_bg_training_batch(
-                    Xs_for_sampling,
-                    Xps,
-                    cfg,
-                    ep,
-                    step,
-                    seed=step_seed,
-                    sampling_mask=sampling_mask,
-                    sampling_min_frac=sampling_min_frac,
-                )
+                batch = _sample_bg_training_batch(Xs_for_sampling, Xps, cfg, ep, step, seed=step_seed)
+            xs_norm = _normalize_bg_batch(_to_device(batch["xp"], device), cfg, mean_t, std_t, min_t, max_t)
+            ys_norm = normalize_bg_residual_tensor(_to_device(batch["x"], device), cfg)
 
-            bg_xs_t = _to_device(bg_dict["xp"], device)
-            bg_ys_norm = normalize_bg_residual_tensor(_to_device(bg_dict["x"], device), cfg)
-            z_key = "z" if "z" in bg_dict else "zc"
-            bg_z_idx = _to_device(bg_dict[z_key], device)
-            bg_y0 = _to_device(bg_dict["y0"], device)
-            bg_x0 = _to_device(bg_dict["x0"], device)
-
-            bg_xs_norm = _normalize_bg_batch(bg_xs_t, cfg, mean_t, std_t, min_t, max_t)
-
-            # ---- AMP autocast: wraps the forward pass + losses ----
             with torch.cuda.amp.autocast(enabled=use_amp, dtype=autocast_dtype):
-                student_out = _forward_bg_outputs(
-                    model,
-                    bg_xs_norm,
-                    bg_z_idx,
-                    bg_y0,
-                    bg_x0,
-                    split_mode=split_mode if use_split_bands else None,
-                    rel_err=getattr(cfg, "rel_err", None),
-                )
-                bg_pred = student_out["pred"]
-
-                if use_split_bands:
-                    if use_three_bands:
-                        tgt_low, tgt_mid, tgt_high = _gaussian_low_mid_high_split_t(
-                            bg_ys_norm,
-                            sigma_low=float(getattr(cfg, "bg_sigma_low", 0.08)),
-                            sigma_mid=float(getattr(cfg, "bg_sigma_mid", 0.18)),
-                        )
-                        loss_low = mse_loss(student_out["low"], tgt_low)
-                        loss_mid = mse_loss(student_out["mid"], tgt_mid)
-                        loss_high = mse_loss(student_out["high"], tgt_high)
-                    else:
-                        tgt_low, tgt_high = _gaussian_low_high_split_t(
-                            bg_ys_norm,
-                            sigma_ratio=float(getattr(cfg, "bg_split_sigma", 0.12)),
-                        )
-                        loss_low = mse_loss(student_out["low"], tgt_low)
-                        loss_mid = bg_ys_norm.new_tensor(0.0)
-                        loss_high = mse_loss(student_out["high"], tgt_high)
-                else:
-                    loss_low = bg_ys_norm.new_tensor(0.0)
-                    loss_mid = bg_ys_norm.new_tensor(0.0)
-                    loss_high = bg_ys_norm.new_tensor(0.0)
-
-                if "pixel_mask" in bg_dict:
-                    pixel_mask_t = torch.from_numpy(bg_dict["pixel_mask"]).to(device)
-                    mse_per_pixel = (bg_pred - bg_ys_norm) ** 2
-                    loss_bg = (mse_per_pixel * pixel_mask_t).sum() / pixel_mask_t.sum().clamp_min(1e-8)
-                else:
-                    loss_bg = mse_loss(bg_pred, bg_ys_norm)
-                freq_focus = getattr(cfg, "bg_freq_focus", "low")
-                freq_boost = float(getattr(cfg, "bg_freq_boost", 1.0))
-                freq_warmup = int(getattr(cfg, "bg_freq_warmup_epochs", 3))
-                freq_target = float(getattr(cfg, "bg_freq_weight", 0.0))
-                _freq_warmup_steps = freq_warmup * cfg.steps_per_epoch
-                if _freq_warmup_steps <= 0:
-                    freq_weight = freq_target
-                else:
-                    _global_step = ep * cfg.steps_per_epoch + step
-                    freq_weight = min(1.0, _global_step / _freq_warmup_steps) * freq_target
-
-                loss_freq, _, _ = fft_mag_phase_loss_bg_t(
-                    bg_pred,
-                    bg_ys_norm,
-                    focus=freq_focus,
-                    boost=freq_boost,
-                    mag_weight=1.0,
-                    phase_weight=float(getattr(cfg, "bg_fft_phase_weight", 1.0)),
-                )
-
+                out = _forward_bg_outputs(model, xs_norm, split_mode=split_mode if use_split_bands else None)
+                pred = out["pred"]
+                loss_bg = mse_loss(pred, ys_norm)
+                g = ep * cfg.steps_per_epoch + step
+                freq_weight = freq_target if freq_warmup_steps <= 0 else min(1.0, g / freq_warmup_steps) * freq_target
+                loss_freq, _, _ = fft_mag_phase_loss_bg_t(pred, ys_norm, focus=freq_focus, boost=freq_boost,
+                                                          mag_weight=1.0, phase_weight=phase_weight)
                 loss = loss_bg + freq_weight * loss_freq
-
                 if use_split_bands:
-                    low_weight = float(getattr(cfg, "bg_low_weight", 0.2))
-                    mid_weight = float(getattr(cfg, "bg_mid_weight", 0.5))
-                    high_weight = float(getattr(cfg, "bg_high_weight", 1.0))
-                    loss = loss + low_weight * loss_low + mid_weight * loss_mid + high_weight * loss_high
+                    tgt_low, tgt_mid, tgt_high = _gaussian_low_mid_high_split_t(ys_norm, sigma_low=sigma_low, sigma_mid=sigma_mid)
+                    loss_low, loss_mid, loss_high = mse_loss(out["low"], tgt_low), mse_loss(out["mid"], tgt_mid), mse_loss(out["high"], tgt_high)
+                    loss = loss + band_w[0] * loss_low + band_w[1] * loss_mid + band_w[2] * loss_high
+                else:
+                    loss_low = loss_mid = loss_high = ys_norm.new_tensor(0.0)
 
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
             scheduler.step()
+            ep_loss.append(float(loss.item())); ep_freq.append(float(loss_freq.item()))
+            ep_low.append(float(loss_low.item())); ep_mid.append(float(loss_mid.item())); ep_high.append(float(loss_high.item()))
 
-            epoch_losses.append(float(loss.item()))
-            epoch_freq_losses.append(float(loss_freq.item()))
-            epoch_low_losses.append(float(loss_low.item()))
-            epoch_mid_losses.append(float(loss_mid.item()))
-            epoch_high_losses.append(float(loss_high.item()))
-
+        if not ep_loss:
+            continue
+        epoch_wall = time.perf_counter() - epoch_start
+        cur_p, cur_max_err = (None, None)
         if evaluator is not None:
-            epoch_train_wall = time.perf_counter() - epoch_start
-            t_eval_start = time.perf_counter()
-            eval_res = evaluator(unwrap_bg_model(model))
+            t0 = time.perf_counter()
+            cur_p, cur_max_err = _evaluate()
+            eval_time_total += time.perf_counter() - t0
+        cum_train_time = time.perf_counter() - t_start_train - eval_time_total
 
-            if isinstance(eval_res, tuple):
-                if len(eval_res) >= 2:
-                    cur_p, cur_max_err = eval_res[:2]
-                else:
-                    cur_p = eval_res[0]
-                    cur_max_err = None
-            else:
-                cur_p = eval_res
-                cur_max_err = None
-
-            eval_time_total += time.perf_counter() - t_eval_start
-            cum_train_time = time.perf_counter() - t_start_train - eval_time_total
-
-            history["epoch"].append(ep + 1)
-            history["loss"].append(float(np.mean(epoch_losses)) if len(epoch_losses) > 0 else 0.0)
+        history["epoch"].append(ep + 1); history["loss"].append(float(np.mean(ep_loss)))
+        history["epoch_wall"].append(float(epoch_wall)); history["time"].append(float(cum_train_time))
+        if cur_p is not None:
             history["psnr"].append((ep + 1, cur_p))
-            history["time"].append(cum_train_time)
-            history["epoch_wall"].append(float(epoch_train_wall))
             if cur_max_err is not None:
                 history["max_err"].append(cur_max_err)
 
-            err_str = f"{cur_max_err:.1f}" if cur_max_err is not None else "N/A"
-            freq_str = f" | Freq: {np.mean(epoch_freq_losses):.6f}" if len(epoch_freq_losses) > 0 else ""
-            low_str = (
-                f" | Low: {np.mean(epoch_low_losses):.6f}"
-                if use_split_bands and len(epoch_low_losses) > 0
-                else ""
-            )
-            mid_str = (
-                f" | Mid: {np.mean(epoch_mid_losses):.6f}"
-                if use_split_bands and len(epoch_mid_losses) > 0
-                else ""
-            )
-            high_str = (
-                f" | High: {np.mean(epoch_high_losses):.6f}"
-                if use_split_bands and len(epoch_high_losses) > 0
-                else ""
-            )
-
-            print(
-                f"{_log_pfx}Epoch {ep + 1:3d} [BG] | train_wall={epoch_train_wall:.2f}s"
-                f" | Loss: {history['loss'][-1]:.6f}"
-                f"{freq_str}{low_str}{mid_str}{high_str} | Global: {cur_p:.2f} dB | MaxErr: {err_str}",
-                end="",
-            )
-
+        msg = (f"{_pfx}Epoch {ep + 1:3d} [BG] | train_wall={epoch_wall:.2f}s | Loss: {history['loss'][-1]:.6f}"
+               f" | Freq: {np.mean(ep_freq):.6f}")
+        if use_split_bands:
+            msg += f" | Low: {np.mean(ep_low):.6f} | Mid: {np.mean(ep_mid):.6f} | High: {np.mean(ep_high):.6f}"
+        if cur_p is not None:
+            msg += f" | Global: {cur_p:.2f} dB | MaxErr: " + (f"{cur_max_err:.1f}" if cur_max_err is not None else "N/A")
             if cur_p > best_psnr:
-                best_psnr = cur_p
-                best_model_weights = copy.deepcopy(unwrap_bg_model(model).state_dict())
-                print("  [New Best!]")
-            else:
-                print()
+                best_psnr, best_weights = cur_p, copy.deepcopy(unwrap_bg_model(model).state_dict())
+                msg += "  [New Best!]"
+        print(msg)
+        if ep == 0:
+            print(f"{_pfx}[timing] first_epoch_pure_train≈{cum_train_time:.3f}s (excludes the end-of-epoch eval)")
 
-            if ep == 0:
-                _ep0_pure = time.perf_counter() - t_start_train - eval_time_total
-                print(
-                    f"{_log_pfx}[timing] first_epoch_pure_train≈{_ep0_pure:.3f}s "
-                    f"(excludes this epoch's end-of-epoch eval)"
-                )
-        else:
-            if len(epoch_losses) <= 0:
-                continue
+        # ---- Early stop (opt-in): loss improved < min_drop for `patience` consecutive epochs ----
+        if early_stop and not stop_training:
+            min_drop = float(getattr(cfg, "bg_es_min_drop", 0.02))
+            patience = max(1, int(getattr(cfg, "bg_es_patience", 2)))
+            vals = history["loss"]
+            if len(vals) >= patience + 1:
+                drops = [(vals[k - 1] - vals[k]) / max(abs(vals[k - 1]), 1e-12) for k in range(len(vals) - patience, len(vals))]
+                if all(d < min_drop for d in drops):
+                    stop_training = True
+                    print(f"{_pfx}[early-stop] loss drop < {min_drop * 100:g}% for {patience} consecutive epochs "
+                          f"({', '.join(f'{d * 100:+.2f}%' for d in drops)}) -> stop at epoch {ep + 1}")
 
-            epoch_train_wall = time.perf_counter() - epoch_start
-            mean_loss = float(np.mean(epoch_losses))
-            cum_train_time = time.perf_counter() - t_start_train - eval_time_total
-
-            history["epoch"].append(ep + 1)
-            history["loss"].append(mean_loss)
-            history["epoch_wall"].append(float(epoch_train_wall))
-            history["time"].append(float(cum_train_time))
-
-            freq_str = (
-                f" | Freq: {np.mean(epoch_freq_losses):.6f}"
-                if len(epoch_freq_losses) > 0
-                else ""
-            )
-            low_str = (
-                f" | Low: {np.mean(epoch_low_losses):.6f}"
-                if use_split_bands and len(epoch_low_losses) > 0
-                else ""
-            )
-            mid_str = (
-                f" | Mid: {np.mean(epoch_mid_losses):.6f}"
-                if use_split_bands and len(epoch_mid_losses) > 0
-                else ""
-            )
-            high_str = (
-                f" | High: {np.mean(epoch_high_losses):.6f}"
-                if use_split_bands and len(epoch_high_losses) > 0
-                else ""
-            )
-
-            print(
-                f"{_log_pfx}Epoch {ep + 1:3d} [BG] | train_wall={epoch_train_wall:.2f}s"
-                f" | Loss: {mean_loss:.6f}"
-                f"{freq_str}{low_str}{mid_str}{high_str}"
-            )
-
-            if ep == 0:
-                print(
-                    f"{_log_pfx}[timing] first_epoch_train_wall={epoch_train_wall:.3f}s "
-                    f"(steps={int(cfg.steps_per_epoch)}, no eval)"
-                )
-
-        # ---- Slope-based early stop (opt-in: cfg.bg_early_stop) --------------
-        # Fit a line to the last `bg_es_window` epochs of the chosen metric and
-        # stop when the slope says training has flattened or reversed:
-        #   metric="psnr": stop when PSNR slope < bg_es_min_slope (dB/epoch)
-        #   metric="loss": stop when mean-normalized loss slope > -bg_es_min_slope
-        if bool(getattr(cfg, "bg_early_stop", False)) and not stop_training:
-            es_window = max(3, int(getattr(cfg, "bg_es_window", 5)))
-            es_metric = str(
-                getattr(cfg, "bg_es_metric", "psnr" if evaluator is not None else "loss")
-            ).lower()
-            if es_metric == "psnr" and evaluator is not None:
-                vals = [p[1] if isinstance(p, tuple) else p for p in history["psnr"]]
-                min_slope = float(getattr(cfg, "bg_es_min_slope", 0.02))  # dB/epoch
-                if len(vals) >= es_window:
-                    y = np.asarray(vals[-es_window:], dtype=np.float64)
-                    slope = float(np.polyfit(np.arange(es_window), y, 1)[0])
-                    if slope < min_slope:
-                        stop_training = True
-                        print(
-                            f"{_log_pfx}[early-stop] PSNR slope {slope:+.4f} dB/ep < "
-                            f"{min_slope:g} over last {es_window} epochs -> stop at epoch {ep + 1}"
-                        )
-            else:
-                # The frequency-loss term ramps in linearly (per-step) over the first
-                # bg_freq_warmup_epochs epochs, so loss *composition* keeps shifting
-                # during the ramp (not divergence).  Judging slope/drop across that
-                # window can still look like a false positive -> drop the ramp epochs
-                # and judge only the composition-stable tail.
-                _fw = int(getattr(cfg, "bg_freq_warmup_epochs", 3))
-                _freq_on = float(getattr(cfg, "bg_freq_weight", 0.0)) > 0.0
-                vals = list(history["loss"])
-                # Only slice once training has actually crossed the warmup boundary
-                # (some epochs are freq-on).  If len(vals) <= _fw, every recorded
-                # epoch is still freq-off — one stable composition — so judge on all
-                # of them.  (Without this guard, freq_warmup >= epoch budget would
-                # slice vals to empty and the early-stop could never fire.)
-                if _freq_on and _fw > 0 and len(vals) > _fw:
-                    vals = vals[_fw:]
-
-                if es_metric == "loss_patience":
-                    # Aggressive: stop once the per-epoch relative loss drop stays
-                    # below bg_es_min_drop for bg_es_patience consecutive epochs.
-                    min_drop = float(getattr(cfg, "bg_es_min_drop", 0.01))   # 1%
-                    patience = max(1, int(getattr(cfg, "bg_es_patience", 2)))
-                    if len(vals) >= patience + 1:
-                        drops = [
-                            (vals[i - 1] - vals[i]) / max(abs(vals[i - 1]), 1e-12)
-                            for i in range(len(vals) - patience, len(vals))
-                        ]
-                        if all(d < min_drop for d in drops):
-                            stop_training = True
-                            _ds = ", ".join(f"{d * 100:+.2f}%" for d in drops)
-                            print(
-                                f"{_log_pfx}[early-stop] loss drop < {min_drop * 100:g}% "
-                                f"for {patience} consecutive epochs ({_ds}) "
-                                f"-> stop at epoch {ep + 1}"
-                            )
-                else:
-                    # Smoother slope variant (bg_es_metric == "loss").
-                    min_slope = float(getattr(cfg, "bg_es_min_slope", 1e-3))  # rel. drop/epoch
-                    if len(vals) >= es_window:
-                        y = np.asarray(vals[-es_window:], dtype=np.float64)
-                        scale = max(abs(float(y.mean())), 1e-12)
-                        slope = float(np.polyfit(np.arange(es_window), y / scale, 1)[0])
-                        if slope > -min_slope:
-                            stop_training = True
-                            print(
-                                f"{_log_pfx}[early-stop] rel-loss slope {slope:+.5f}/ep > "
-                                f"-{min_slope:g} over last {es_window} post-warmup epochs -> stop at epoch {ep + 1}"
-                            )
-
+    history["total_steps"] = int(_steps_done)
     core_model = unwrap_bg_model(model)
-    if evaluator is not None and best_model_weights is not None:
-        core_model.load_state_dict(best_model_weights)
+    if best_weights is not None:
+        core_model.load_state_dict(best_weights)
 
     pure_train_time = time.perf_counter() - t_start_train - eval_time_total
-    print(f"\n{_log_pfx}--- Experiment [BG_only] finished ---")
-    print(f"{_log_pfx}--- Pure training time: {pure_train_time:.2f} s ---")
-    _ew = history.get("epoch_wall") or []
-    if len(_ew) > 0:
-        _ew_arr = np.asarray(_ew, dtype=np.float64)
-        print(
-            f"{_log_pfx}[timing] epochs={len(_ew)} | train_wall/epoch: "
-            f"mean={float(_ew_arr.mean()):.2f}s min={float(_ew_arr.min()):.2f}s "
-            f"max={float(_ew_arr.max()):.2f}s | sum={float(_ew_arr.sum()):.2f}s"
-        )
+    print(f"\n{_pfx}--- Experiment [BG_only] finished ---\n{_pfx}--- Pure training time: {pure_train_time:.2f} s ---")
+    if history["epoch_wall"]:
+        ew = np.asarray(history["epoch_wall"], dtype=np.float64)
+        print(f"{_pfx}[timing] epochs={len(ew)} | train_wall/epoch: mean={ew.mean():.2f}s min={ew.min():.2f}s "
+              f"max={ew.max():.2f}s | sum={ew.sum():.2f}s")
     if evaluator is not None:
-        print(f"{_log_pfx}--- Best global PSNR: {best_psnr:.2f} dB ---")
-
-    # Extract optimizer state to CPU to prevent memory leak
-    opt_state = optimizer.state_dict()
-    for state in opt_state['state'].values():
-        for k, v in state.items():
-            if isinstance(v, torch.Tensor):
-                state[k] = v.cpu()
-    history["optimizer_state"] = opt_state
-
+        print(f"{_pfx}--- Best global PSNR: {best_psnr:.2f} dB ---")
     return core_model, history

@@ -1,4 +1,3 @@
-import gc
 import os
 import random
 import sys
@@ -27,43 +26,6 @@ def set_deterministic_seed(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-def load_and_process_data_with_sz3(
-    gt_path,
-    aux_paths,
-    sz_lib_path,
-    pysz_path,
-    rel_err,
-    data_shape,
-    sz_bin_path=None,
-):
-    ensure_pysz_path(pysz_path)
-    from pysz import SZ
-
-    dtype = np.float32
-    sz = SZ(sz_lib_path)
-
-    print(f"[*] Loading target field: {os.path.basename(gt_path)}")
-    gt_target = np.fromfile(gt_path, dtype=dtype).reshape(data_shape)
-
-    print(f"[*] Running SZ3 compression (REL = {rel_err})...")
-    sz_bytes, _ = sz.compress(gt_target, 1, 0, rel_err, 0)
-    if sz_bin_path is not None:
-        with open(sz_bin_path, "wb") as f:
-            f.write(sz_bytes)
-        print("Saved SZ bitstream to:", sz_bin_path)
-    lq_target = sz.decompress(sz_bytes, data_shape, dtype)
-
-    aux_data = []
-    for idx, path in enumerate(aux_paths):
-        print(f"[*] Loading auxiliary field {idx + 1}/{len(aux_paths)}: {os.path.basename(path)}")
-        aux_data.append(np.fromfile(path, dtype=dtype).reshape(data_shape))
-
-    print("[Info] Running...")
-    gt_data = [gt_target] + aux_data
-    lq_data = [lq_target] + aux_data
-    return gt_data, lq_data
-
-
 def _error_bounded_post_process(
     x_enhanced,
     x_prime,
@@ -90,17 +52,6 @@ def _error_bounded_post_process(
         print(f"    Max delta: {max_delta:.3e}")
 
     return d_prime
-
-
-def free_memory(*objs):
-    for obj in objs:
-        try:
-            del obj
-        except Exception:
-            pass
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
 
 
 def load_multifield_from_disk(

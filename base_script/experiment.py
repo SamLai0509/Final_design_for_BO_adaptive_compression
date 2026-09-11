@@ -72,64 +72,16 @@ def build_bg_only_cfg(
     return cfg
 
 
-def compute_param_budget_bytes(original_bytes, sz3_bytes, target_total_cr):
-    """Byte budget for the neural model under a target *total* compression ratio.
+def estimate_bg_model_param_bytes(n_fields, shape, bg_arch="spatial", bg_h=7, dtype_bytes=4, **legacy_kwargs):
+    """Instantiate the BG model for a given width and report its size.
 
-    Total stored bytes = ``sz3_bytes + model_bytes`` and ``CR = original_bytes / total``,
-    so ``model_bytes = original_bytes / target_total_cr - sz3_bytes`` (clamped at 0).
-    Combine with ``estimate_bg_model_param_bytes`` / ``pick_bg_h_under_budget`` to pick
-    a model width that fits.
-    """
-    target_total_cr = float(target_total_cr)
-    if target_total_cr <= 0:
-        raise ValueError("target_total_cr must be positive.")
-    budget = float(original_bytes) / target_total_cr - float(sz3_bytes)
-    return max(0.0, float(budget))
-
-
-def estimate_bg_model_param_bytes(
-    n_fields,
-    shape,
-    bg_arch,
-    bg_h,
-    dtype_bytes=4,
-    bg_use_se=False,
-    bg_se_reduction=4,
-    bg_feat_attn=False,
-    bg_low_adapter=False,
-    bg_mid_adapter=False,
-    bg_high_adapter=False,
-    bg_slab_k=7,
-    bg_split_bands=True,
-    bg_split_mode="three",
-):
-    """Instantiate the BG model for a given shape/width and report its size.
-
-    Returns ``(num_trainable_params, param_bytes)`` where
-    ``param_bytes = num_params * dtype_bytes`` (e.g. ``dtype_bytes=2`` for bf16 storage).
-    Used to convert a parameter budget into a model width and to account for the
-    model's contribution to the compression ratio.
+    Returns ``(num_trainable_params, param_bytes)`` with ``param_bytes = num_params *
+    dtype_bytes`` (``dtype_bytes=2`` for the bf16 weights that are charged to the CR).
+    ``shape`` and legacy keyword arguments are accepted for call-site compatibility.
     """
     from siren_fft_backbone_model import UNET_Model
 
-    model = UNET_Model(
-        n_fields=int(n_fields),
-        K=7,
-        D=int(shape[0]),
-        H=int(shape[1]),
-        W=int(shape[2]),
-        bg_hidden=int(bg_h),
-        bg_arch=str(bg_arch),
-        bg_use_se=bool(bg_use_se),
-        bg_se_reduction=int(bg_se_reduction),
-        bg_feat_attn=bool(bg_feat_attn),
-        bg_low_adapter=bool(bg_low_adapter),
-        bg_mid_adapter=bool(bg_mid_adapter),
-        bg_high_adapter=bool(bg_high_adapter),
-        bg_slab_k=int(bg_slab_k),
-        bg_split_bands=bool(bg_split_bands),
-        bg_split_mode=bg_split_mode,
-    )
+    model = UNET_Model(n_fields=int(n_fields), bg_hidden=int(bg_h), bg_arch=str(bg_arch),
+                       bg_split_bands=True, bg_split_mode="three")
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    param_bytes = int(num_params) * int(dtype_bytes)
-    return int(num_params), int(param_bytes)
+    return int(num_params), int(num_params) * int(dtype_bytes)

@@ -15,3 +15,6 @@ __pycache__/
 *.pt
 *.pth
 ablation_ckpts/
+
+# local tool settings
+.claude/

@@ -219,7 +219,7 @@ meaningful. SPERR is timed single-threaded in both configurations.
 
 ```bash
 cd sec_4_evaluation/power_spectrum
-# AdaMit (batch 1, three seeds) and NeurLZ (100 epochs of its own recipe) at CR~300, eps(k) after every epoch
+# AdaMit (batch 1) and NeurLZ (100 epochs of its own recipe) at CR~300, eps(k) after every epoch
 python power_spectrum_fig12.py --cr 317.4 --budget 40 --seed 17 --batch 1 \
        --aux-mode enhanced --aux-enhanced-dir ../multi_gpu/bench_out/enhanced_cr300 --out figures/fig12_b1_s17
 python plot_fig12_2panel.py --data figures/fig12_b1_s17 --neurlz-data figures/fig12_enh

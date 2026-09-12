@@ -36,7 +36,7 @@
     "velocity_y",
     "velocity_z"
   ],
-  "aux_enhanced_dir": "/Users/923714256/Final_design_for_BO_adaptive_compression/MultiGPU_DDP/bench_out/enhanced_cr300",
+  "aux_enhanced_dir": "bench_out/enhanced_cr300",
   "t_sz_compress": 1.7302189841866493,
   "t_sz_decompress": 0.6563632730394602,
   "t_train": 10.001655927393585,

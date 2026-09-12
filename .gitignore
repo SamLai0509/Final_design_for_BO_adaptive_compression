@@ -15,3 +15,30 @@ __pycache__/
 *.pt
 *.pth
 ablation_ckpts/
+
+# offloaded data / archives / previews (2026-09-10)
+*.bin
+*.tar.gz
+*.npz
+*.sqlite3
+_trash_*/
+_archive_*/
+Reproduce/**/*.png
+!figures/panels/**
+
+# data symlink (points to /storage/sam/SDRBench)
+SDRBench
+
+# local tool settings / stale cache experiments
+.claude/
+SPERR/sperr_fft_cache/_stale/
+SPERR/sperr_fft_cache/_budget20/
+SPERR/sperr_fft_cache/_budget_sweep/
+SPERR/sperr_fft_cache/_pre_fullfft/
+
+# Reproduce/: only source (.py/.sh) and notes (.md) are tracked; results, pins, figures, logs stay local
+Reproduce/**
+!Reproduce/**/
+!Reproduce/**/*.py
+!Reproduce/**/*.md
+!Reproduce/**/*.sh

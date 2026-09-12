@@ -57,3 +57,6 @@ sec_4_evaluation/overleaf_figures/*
 
 # machine-specific paths (see local_paths.env.example)
 local_paths.env
+
+# matched-CR auxiliary stream archive (built by `SPERR_fft.py --task aux_prep`; may be a symlink to bulk storage)
+sec_4_evaluation/sperr_fft_cache/aux_streams

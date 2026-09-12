@@ -41,6 +41,8 @@ def load(pin):
     j = json.load(open(pin if os.path.isabs(pin) else os.path.join(CACHE, pin)))
     out = {}
     for k, f in j.items():
+        if k.startswith("_") or not str(f).endswith(".pkl"):   # "_note" and other metadata keys
+            continue
         r = pickle.load(open(os.path.join(CACHE, f), "rb"))
         if isinstance(r, dict) and "results" in r and isinstance(r["results"], dict):
             r = r["results"]

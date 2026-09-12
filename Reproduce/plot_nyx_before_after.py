@@ -9,8 +9,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-REPO  = "/home/sam/Halo_Finder/Final_design"
-CACHE = f"{REPO}/SPERR/sperr_fft_cache"
+REPO  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CACHE = f"{REPO}/sec_4_evaluation/sperr_fft_cache"
 OUT   = f"{REPO}/Reproduce/figures"; os.makedirs(OUT, exist_ok=True)
 since = float(open(f"{REPO}/Reproduce/logs/RUN_START").read())
 

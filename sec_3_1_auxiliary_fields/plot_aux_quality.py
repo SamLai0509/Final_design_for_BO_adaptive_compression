@@ -14,8 +14,8 @@ import os, re, json, glob, pickle, datetime
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-R = os.path.dirname(os.path.abspath(__file__))
-CACHE = os.path.join(R, "..", "SPERR", "sperr_fft_cache")
+R = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Reproduce")
+CACHE = os.path.join(R, "..", "sec_4_evaluation", "sperr_fft_cache")
 LOG = os.path.join(R, "logs", "auxq_ablation.log")
 
 def stage_windows():

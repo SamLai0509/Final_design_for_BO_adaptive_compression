@@ -1,7 +1,7 @@
 #!/bin/sh
 # NeurLZ time-to-match, generous caps + stop when AdaMit's PSNR is reached.
-REPO=/home/sam/Halo_Finder/Final_design; PY=/home/sam/miniconda3/bin/python
-OUT=$REPO/Reproduce/experiment/neurlz_long; L=$OUT/run_2000.log; cd $REPO/SPERR
+REPO=${ADAMIT_REPO:-$(cd "$(dirname "$0")/../../.." && pwd)}; PY=${PYTHON:-python}
+OUT=$REPO/Reproduce/experiment/neurlz_long; L=$OUT/run_2000.log; cd $REPO/sec_4_evaluation
 for ds in nyx_b nyx_t nyx_d mag qmcpack miranda; do
   echo "[nlz] === $ds start $(date) ===" >> $L
   SPERR_NLZ_DATASETS=$ds SPERR_NLZ_CAPS="nyx:2000,mag:1500,qmcpack:1500,miranda:2000" SPERR_NLZ_STOP_AT_TARGET=1 \

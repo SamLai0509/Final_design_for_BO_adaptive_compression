@@ -7,9 +7,9 @@
 #                      temperature  <- ENH DMD + ENH baryon + dec velocities
 #   order B:           temperature  <- ENH DMD + dec baryon + dec velocities     -> export enhanced T
 #                      baryon       <- ENH DMD + ENH T + dec velocities
-REPO=/home/sam/Halo_Finder/Final_design; PY=/home/sam/miniconda3/bin/python; L=$REPO/Reproduce/logs
-C=/storage/sam/Final_visualization/cascade_2026-08-29; mkdir -p $C/stage1 $C/A $C/B
-cd $REPO/SPERR; echo "[cascade] start $(date)" >> $L/run_cascade_6000.log
+REPO=${ADAMIT_REPO:-$(cd "$(dirname "$0")/.." && pwd)}; PY=${PYTHON:-python}; L=$REPO/Reproduce/logs
+C=${ADAMIT_CASCADE_DIR:-$REPO/Reproduce/cascade}; mkdir -p $C/stage1 $C/A $C/B
+cd $REPO/sec_4_evaluation; echo "[cascade] start $(date)" >> $L/run_cascade_6000.log
 
 run_stage () {   # $1 tag  $2 task  $3 enhanced-dir (also export dir)
   echo "[cascade] === $1 ($2) start $(date) ===" >> $L/run_cascade_6000.log

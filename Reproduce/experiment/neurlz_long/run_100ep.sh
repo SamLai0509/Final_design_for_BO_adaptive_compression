@@ -1,8 +1,8 @@
 #!/bin/sh
 # NeurLZ at its default 100 epochs, clean timing (evaluate every 10 epochs), one process per dataset.
 # Waits for the running QMCPack 100-epoch job before starting (never share the GPU).
-REPO=/home/sam/Halo_Finder/Final_design; PY=/home/sam/miniconda3/bin/python
-OUT=$REPO/Reproduce/experiment/neurlz_long; L=$OUT/run_100ep.log; cd $REPO/SPERR
+REPO=${ADAMIT_REPO:-$(cd "$(dirname "$0")/../../.." && pwd)}; PY=${PYTHON:-python}
+OUT=$REPO/Reproduce/experiment/neurlz_long; L=$OUT/run_100ep.log; cd $REPO/sec_4_evaluation
 while pgrep -f "python -u SPERR_fft[.]py" > /dev/null; do sleep 30; done
 for ds in nyx_b nyx_t nyx_d mag miranda; do
   echo "[nlz100] === $ds start $(date) ===" >> $L

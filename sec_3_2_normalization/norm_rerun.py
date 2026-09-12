@@ -3,7 +3,7 @@
 Both curves are the NeurLZ-style BasicUNet (features (4,)*6, lr 1e-2, batch 10, 100 epochs, pure MSE on the
 normalized SZ3 residual), differing ONLY by normalization (z-score vs min-max) -- exactly the notebook's cells.
 The single change: the five sibling channels are the decoder's copies (SZ3-archived at the CR level closest to
-the target's CR, from SPERR/sperr_fft_cache/aux_streams/) instead of the lossless originals.
+the target's CR, from sec_4_evaluation/sperr_fft_cache/aux_streams/) instead of the lossless originals.
     python norm_rerun.py  -> norm_cr_time_temperature.{pdf,png} + norm_rerun_results.json
 """
 import os, json, time
@@ -11,7 +11,9 @@ import numpy as np
 import matplotlib; matplotlib.use("Agg")
 HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)
 NB = os.path.join(HERE, "normalization.ipynb")
-AUX_STREAM_DIR = "/home/sam/Halo_Finder/Final_design/SPERR/sperr_fft_cache/aux_streams"
+sys.path.insert(0, os.path.join(HERE, "..", "base_script"))
+from local_paths import P
+AUX_STREAM_DIR = os.path.join(P("ADAMIT_CACHE_DIR"), "aux_streams")
 LEVELS = (100, 200, 300, 400, 500, 600)
 cells = ["".join(c["source"]) for c in json.load(open(NB))["cells"] if c["cell_type"] == "code"]
 def cell(marker): return next(c for c in cells if marker in c)

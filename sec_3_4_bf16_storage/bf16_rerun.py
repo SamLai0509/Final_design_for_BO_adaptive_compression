@@ -14,9 +14,11 @@ matplotlib.use("Agg")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NB = os.path.join(HERE, "bf_16.ipynb")
-AUX_STREAM_DIR = "/home/sam/Halo_Finder/Final_design/SPERR/sperr_fft_cache/aux_streams"
+sys.path.insert(0, os.path.join(HERE, "..", "base_script"))
+from local_paths import P
+AUX_STREAM_DIR = os.path.join(P("ADAMIT_CACHE_DIR"), "aux_streams")
 LEVELS = (100, 200, 300, 400, 500, 600)
-NYX_DIR = "/home/sam/Halo_Finder/halo_finder_v1/SDRBENCH-EXASKY-NYX-512x512x512/origin/"
+NYX_DIR = P("ADAMIT_NYX_DIR")
 NYX_SHAPE = (512, 512, 512)
 
 cells = ["".join(c["source"]) for c in json.load(open(NB))["cells"] if c["cell_type"] == "code"]
@@ -48,7 +50,7 @@ del tgt, sibs
 import torch; torch.cuda.empty_cache()
 
 # ── Miranda 1024^3 @ rel 6.9948e-3, 240k params, 80 s (as in the notebook) ───────────────
-_v = np.fromfile("/home/sam/Halo_Finder/halo_finder_v1/miranda_1024x1024x1024_float32.raw", dtype=np.float32).reshape((1024, 1024, 1024))
+_v = np.fromfile(P("ADAMIT_MIRANDA_FILE"), dtype=np.float32).reshape((1024, 1024, 1024))
 r_mir = run_ab("Miranda", _v, [], rel=6.9948e-03, params=240000, time_budget=80.0)
 del _v; torch.cuda.empty_cache()
 

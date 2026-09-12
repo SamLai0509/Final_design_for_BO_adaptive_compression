@@ -1,5 +1,7 @@
 # Code cleanup plan (2026-09-10) — proposal, nothing moved yet
 
+> **Folder names (2026-09-12):** the repository folders were renamed after the paper sections: `Normalization/`→`sec_3_2_normalization/`, `frequency_head_loss/`→`sec_3_3_frequency_loss/`, `Model_parameter_Scaling/`→`sec_3_4_model_scaling/`, `bf_16_vs_32/`→`sec_3_4_bf16_storage/`, `BO_Adaptive/`→`sec_3_5_bayesian_opt/`, `SPERR/`→`sec_4_evaluation/`; the aux-quality / cascade scripts moved from `Reproduce/` to `sec_3_1_auxiliary_fields/`. Machine paths are now resolved by `base_script/local_paths.py`.
+
 Legend: DELETE = safe to remove; ARCHIVE = move to `_archive_2026-09-10/` (reversible, not in git);
 TRIM = edit inside a file; KEEP = part of the paper's final pipeline.
 
@@ -56,7 +58,7 @@ TRIM = edit inside a file; KEEP = part of the paper's final pipeline.
 ## DONE 2026-09-10
 - 108 files (42 MB) moved to `_archive_2026-09-10/` (gitignored, reversible with `mv`).
 - Deleted: `_trash_2026-08-28/`, root `benchmarks/`, `base_script/metrics.py`, `db.sqlite3` (untracked), all `__pycache__`.
-- Data offloaded to `/storage/sam/repo_offload/`: `handoff_*.tar.gz` (150 MB), `aux_streams/` (145 MB, symlinked back into
+- Data offloaded to `<storage>/repo_offload/`: `handoff_*.tar.gz` (150 MB), `aux_streams/` (145 MB, symlinked back into
   `SPERR/sperr_fft_cache/`), plus `SPERR_fft.py.bak_2026-09-10` (pre-trim backup).
 - `SPERR/SPERR_fft.py` trimmed 2085 -> 1566 lines (WarpX, Hurricane, CLOUD, Miranda-256, density, SCALE, S3D, SCALE-T,
   GCLDLWP, CESM blocks and the combined-plot block removed; CLI choices = nyx_b/nyx_t/nyx_d/miranda/mag/qmcpack/all/aux_prep/neurlz_long).
@@ -72,7 +74,7 @@ TRIM = edit inside a file; KEEP = part of the paper's final pipeline.
   two-band split and slab2d/res3d sampling paths removed from bg_stage/bg_sampling/bg_normalize/Patch_data;
   config_io lost load_and_process_data_with_sz3/free_memory, experiment lost compute_param_budget_bytes.
   Verified: old vs new UNET_Model identical parameter counts, state_dict-compatible, identical outputs; pipeline cache hit;
-  forced Magnetic band-0 training run reproduces the pinned gain. Pre-edit copies: /storage/sam/repo_offload/base_script_bak_2026-09-10/.
+  forced Magnetic band-0 training run reproduces the pinned gain. Pre-edit copies: <storage>/repo_offload/base_script_bak_2026-09-10/.
 - `train_bg_only` refactor (2026-09-10, bg_stage.py 856 -> 515 lines): dropped unused warm-start args
   (init_state_dict / init_optimizer_state) and the optimizer-state export, the never-set sampling-mask /
   pixel-mask path, the positional z/y0/x0/rel_err plumbing through the DataParallel adapter, and the
@@ -80,10 +82,10 @@ TRIM = edit inside a file; KEEP = part of the paper's final pipeline.
   epochs" rule remains, still opt-in and disabled in experiments). Epoch-end logging unified into one block.
   Kept: bf16 AMP, GPU-resident sampling, epoch/step schedule calibration, DDP stop-flag, bg_max_steps replay,
   bg_log_prefix. Verified: synthetic run with evaluator, forced Magnetic band-0 (+1.4 SZ3 / +0.6 SPERR vs
-  pinned +1.51 / +0.62), pipeline cache hit. Pre-refactor copy: /storage/sam/repo_offload/base_script_bak_2026-09-10/bg_stage.pre_refactor.py
-- End-to-end validation of the refactored code (2026-09-10, `/storage/sam/repo_offload/validation_2026-09-10/`):
+  pinned +1.51 / +0.62), pipeline cache hit. Pre-refactor copy: <storage>/repo_offload/base_script_bak_2026-09-10/bg_stage.pre_refactor.py
+- End-to-end validation of the refactored code (2026-09-10, `<storage>/repo_offload/validation_2026-09-10/`):
   forced `--task nyx_b`: identical base CRs on both compressors; AdaMit gains within 0.13 dB on 8/10 points, the other two
   higher by +1.05/+0.61 dB (different Phase-1 pick, cuDNN autotune run-to-run); NeurLZ identical. Forced `--task qmcpack`
   (step-calibration path): pkl BYTE-IDENTICAL to the pin (deterministic on 69x69 slices). BO notebook `nyx_miranda.ipynb`
   executed headless: same base CR, same Y-axis pick, per-config PSNRs within 0.16 dB, Phase-1 pick 9.4e-3 (was 7.6e-3;
-  0.13 dB from the best full-res config). Pinned pkls restored untouched; SDRBench moved to /storage/sam/SDRBench (symlink).
+  0.13 dB from the best full-res config). Pinned pkls restored untouched; SDRBench moved to <storage>/SDRBench (symlink).

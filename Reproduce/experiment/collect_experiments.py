@@ -10,7 +10,7 @@ Writes pins + pkl copies + summary.md (per-point PSNR gain / FFT reductions) + a
 """
 import os, re, glob, json, time, shutil, pickle
 import numpy as np
-REPO = "/home/sam/Halo_Finder/Final_design"; CACHE = f"{REPO}/SPERR/sperr_fft_cache"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))); CACHE = f"{REPO}/sec_4_evaluation/sperr_fft_cache"
 L = f"{REPO}/Reproduce/logs"; OUT = f"{REPO}/Reproduce/experiment"; os.makedirs(f"{OUT}/pkl", exist_ok=True)
 PREFIX = {"Baryon": "NYX_baryon_density", "Temp": "NYX_temperature", "DMD": "NYX_dark_matter_density"}
 TASK2KEY = {"nyx_b": "Baryon", "nyx_t": "Temp", "nyx_d": "DMD"}

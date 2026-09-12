@@ -3,7 +3,7 @@
 Reuses the notebook's own engine (cells 1-2 of nyx_miranda_isoepoch.ipynb are exec'ed, so the sweep is
 byte-identical) and changes exactly two things:
   * siblings: instead of the lossless originals, each sibling is the SZ3-archived copy at the CR level
-    closest to the target's CR (SPERR/sperr_fft_cache/aux_streams/, the same streams the paper run uses);
+    closest to the target's CR (sec_4_evaluation/sperr_fft_cache/aux_streams/, the same streams the paper run uses);
   * slice sampling: 'shuffled' (paper protocol) instead of 'sequential'.
 Everything else (10 fixed epochs, lr 1e-3, 3k-30k parameter ladder, rel bands) is unchanged.
     python isoepoch_nyx_rerun.py   -> isoepoch_nyx_crmatched.json + psnr_vs_cr_isoepoch_nyx_baryon_temp.{pdf,png}
@@ -15,10 +15,12 @@ matplotlib.use("Agg")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NB   = os.path.join(HERE, "nyx_miranda_isoepoch.ipynb")
-AUX_STREAM_DIR = "/home/sam/Halo_Finder/Final_design/SPERR/sperr_fft_cache/aux_streams"
+sys.path.insert(0, os.path.join(HERE, "..", "base_script"))
+from local_paths import P
+AUX_STREAM_DIR = os.path.join(P("ADAMIT_CACHE_DIR"), "aux_streams")
 LEVELS = (100, 200, 300, 400, 500, 600)
 NYX_SHAPE = (512, 512, 512)
-nyx_dir = "/home/sam/Halo_Finder/halo_finder_v1/SDRBENCH-EXASKY-NYX-512x512x512/origin/"
+nyx_dir = P("ADAMIT_NYX_DIR")
 
 cells = ["".join(c["source"]) for c in json.load(open(NB))["cells"] if c["cell_type"] == "code"]
 ns = {}
@@ -43,7 +45,7 @@ def sibling(field, cr):
         if any(k[1] != level for k in _sib_cache):
             _sib_cache.clear()                                  # keep one level resident (~2.5 GB)
         stem = f"{AUX_STREAM_DIR}/sz3_{field}_f32_cr{level}"
-        assert os.path.isfile(stem + ".bin"), f"missing {stem}.bin (run `python SPERR/SPERR_fft.py --task aux_prep`)"
+        assert os.path.isfile(stem + ".bin"), f"missing {stem}.bin (run `python sec_4_evaluation/SPERR_fft.py --task aux_prep`)"
         _sib_cache[key] = np.ascontiguousarray(sz_engine.decompress(np.fromfile(stem + ".bin", np.uint8), NYX_SHAPE, np.float32), np.float32)
         meta = json.load(open(stem + ".json"))
         print(f"  [aux] {field:20s} target CR {cr:6.1f} -> level {level} (SZ3 stream CR {meta['cr']:.1f})", flush=True)

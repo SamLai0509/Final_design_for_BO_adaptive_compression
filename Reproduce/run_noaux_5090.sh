@@ -1,8 +1,8 @@
 #!/bin/bash
 # No-aux (single-field) ablation of the three NYX fields on the 5090, pinned to 4 cores / nice 19 so the
 # RTX 6000 paper chain is barely touched. Indicative numbers only (budgeted training on a throttled box).
-REPO=/home/sam/Halo_Finder/Final_design; PY=/home/sam/miniconda3/bin/python; L=$REPO/Reproduce/logs
-cd $REPO/SPERR
+REPO=${ADAMIT_REPO:-$(cd "$(dirname "$0")/.." && pwd)}; PY=${PYTHON:-python}; L=$REPO/Reproduce/logs
+cd $REPO/sec_4_evaluation
 echo "[noaux] start $(date)" >> $L/run_noaux_5090.log
 for T in nyx_b nyx_t nyx_d; do
   echo "[noaux] === $T start $(date) ===" >> $L/run_noaux_5090.log

@@ -26,15 +26,15 @@ _archive_*/
 Reproduce/**/*.png
 
 
-# data symlink (points to /storage/sam/SDRBench)
+# data symlink (points to the local SDRBench copy)
 SDRBench
 
 # local tool settings / stale cache experiments
 .claude/
-SPERR/sperr_fft_cache/_stale/
-SPERR/sperr_fft_cache/_budget20/
-SPERR/sperr_fft_cache/_budget_sweep/
-SPERR/sperr_fft_cache/_pre_fullfft/
+sec_4_evaluation/sperr_fft_cache/_stale/
+sec_4_evaluation/sperr_fft_cache/_budget20/
+sec_4_evaluation/sperr_fft_cache/_budget_sweep/
+sec_4_evaluation/sperr_fft_cache/_pre_fullfft/
 
 # Reproduce/: only source (.py/.sh) and notes (.md) are tracked; results, pins, figures, logs stay local
 Reproduce/**
@@ -42,14 +42,18 @@ Reproduce/**
 !Reproduce/**/*.py
 !Reproduce/**/*.md
 !Reproduce/**/*.sh
+sec_3_1_auxiliary_fields/*.pdf
 
 # previews and stale side results (2026-09-12)
 *.png
 
-BO_Adaptive/bo_results/*
-!BO_Adaptive/bo_results/*_final.pkl
-BO_Adaptive/NYX_Miranda_1x4.pdf
-SPERR/run_logs/
-SPERR/overleaf_figures/*
-!SPERR/overleaf_figures/sperr_cmp_all6_3x2.pdf
-!SPERR/overleaf_figures/sperr_fft_all6.pdf
+sec_3_5_bayesian_opt/bo_results/*
+!sec_3_5_bayesian_opt/bo_results/*_final.pkl
+sec_3_5_bayesian_opt/NYX_Miranda_1x4.pdf
+sec_4_evaluation/run_logs/
+sec_4_evaluation/overleaf_figures/*
+!sec_4_evaluation/overleaf_figures/sperr_cmp_all6_3x2.pdf
+!sec_4_evaluation/overleaf_figures/sperr_fft_all6.pdf
+
+# machine-specific paths (see local_paths.env.example)
+local_paths.env

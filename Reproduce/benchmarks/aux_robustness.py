@@ -11,14 +11,15 @@ GPU: cuda:1 (5090); the six-field chain owns cuda:0."""
 import os, sys, time, io, contextlib, random
 import numpy as np, torch
 
-sys.path.append("/home/sam/Halo_Finder/Final_design/base_script")
-sys.path.append("/home/sam/Data_Compression/SZ3/tools/pysz")
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "base_script"))
+from local_paths import P
+sys.path.append(P("ADAMIT_PYSZ"))
 from pysz import SZ
 from experiment import build_bg_only_cfg
 from bg_stage import train_bg_only, run_bg_inference, unwrap_bg_model
 from bg_shard import pick_bg_h_under_budget
 
-NB="/home/sam/Halo_Finder/halo_finder_v1/SDRBENCH-EXASKY-NYX-512x512x512/origin/"
+NB=P("ADAMIT_NYX_DIR")
 FIELDS=["baryon_density.f32","temperature.f32","dark_matter_density.f32",
         "velocity_z.f32","velocity_x.f32","velocity_y.f32"]
 SHAPE=(512,512,512); REL=1.1708e-5; LR=9.3e-3; AXIS=1; BUDGET=9.0; SEED=17
@@ -33,7 +34,7 @@ def psnr(a,b):
 
 vols=[np.fromfile(NB+f,np.float32).reshape(SHAPE) for f in FIELDS]
 gt=vols[0]; aux=vols[1:]
-sz=SZ("/home/sam/Data_Compression/SZ3/build/lib64/libSZ3c.so")
+sz=SZ(P("ADAMIT_SZ3_LIB"))
 b,cr=sz.compress(gt,1,0,REL,0); lq=np.ascontiguousarray(sz.decompress(b,SHAPE,np.float32),np.float32); del b
 print(f"target: SZ3 rel={REL:.3e} CR={cr:.0f} base PSNR {psnr(gt,lq):.2f}", flush=True)
 

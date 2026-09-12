@@ -7,7 +7,7 @@ SPERR+NeurLZ) and same 4 datasets (NYX x3 targets, Miranda, WarpX, Magnetic Reco
     mag_err, phase_err = _global_fft_err(x_true, x_hat)
 
 a strided-2D-FFT metric (mean |delta FFT magnitude| and mean |delta wrapped phase| over
-~32 z-slices), reused as-is from frequency_head_loss/fft_err.ipynb.
+~32 z-slices), reused as-is from sec_3_3_frequency_loss/fft_err.ipynb.
 
 IMPORTANT: SPERR.py's cache only stores CR/PSNR numbers -- no model weights or
 reconstructed volumes were ever saved, so FFT error can't be computed "for free" from
@@ -30,13 +30,15 @@ import torch
 # ─────────────────────────────────────────────────────────────────────────────
 # Setup
 # ─────────────────────────────────────────────────────────────────────────────
-SPERR_BIN    = "/home/sam/Halo_Finder/SPERR/build/bin/sperr3d"
-SZ3_LIB      = "/home/sam/Data_Compression/SZ3/build/lib64/libSZ3c.so"
-PYSZ_PATH    = "/home/sam/Data_Compression/SZ3/tools/pysz"
-SCRIPTS_PATH = "/home/sam/Halo_Finder/Final_design/base_script"
-for _p in (PYSZ_PATH, SCRIPTS_PATH):
-    if _p not in sys.path:
-        sys.path.append(_p)
+SCRIPTS_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "base_script"))
+if SCRIPTS_PATH not in sys.path:
+    sys.path.append(SCRIPTS_PATH)
+from local_paths import P          # env var > <repo>/local_paths.env > placeholder (see local_paths.env.example)
+SPERR_BIN = P("ADAMIT_SPERR_BIN")
+SZ3_LIB   = P("ADAMIT_SZ3_LIB")
+PYSZ_PATH = P("ADAMIT_PYSZ")
+if PYSZ_PATH not in sys.path:
+    sys.path.append(PYSZ_PATH)
 
 from pysz import SZ
 from bg_stage import train_bg_only, run_bg_inference, unwrap_bg_model
@@ -112,7 +114,7 @@ def _global_fft_err(x_true, x_hat, n_slices=None):
     """Global FFT magnitude / phase L1 error over z-slices.
 
     n_slices=None uses EVERY slice. The previous default of 32 came from
-    frequency_head_loss/fft_err.ipynb and was never re-checked for this paper.
+    sec_3_3_frequency_loss/fft_err.ipynb and was never re-checked for this paper.
     Measured against the full-volume value on NYX baryon_density (512^3, SZ3 @
     rel=4.02e-06): 32 slices give magnitude to within 0.89% -- fine -- but phase to
     only 11.6%, and the phase estimate is still non-monotonic at N=128 (16.0% / 11.6%
@@ -244,7 +246,7 @@ BO_MIN_GAIN_DB      = 0.30
 # +0.00 dB on 170 of ~300 logged decisions, and the gate fired on 56/60 operating points
 # of the six-field run, discarding the search almost every time. What the gate should
 # ask is whether the CONFIGURATIONS are distinguishable from each other, which is what
-# the standalone BO study (BO_Adaptive/NYX_Magnetic.ipynb) actually observes: there the
+# the archived standalone BO study (NYX_Magnetic.ipynb) actually observes: there the
 # three slice directions score 79.75 / 81.08 / 92.66 dB on the proxy -- a 13 dB spread --
 # and its pick lands within 0.23 dB of the true full-resolution optimum. So the gate now
 # tests the spread across completed trials.
@@ -1032,7 +1034,7 @@ print("bench_field_fft ready")
 # ─────────────────────────────────────────────────────────────────────────────
 # FFT results cache (own directory -- doesn't touch SPERR.py's sperr_cache/)
 # ─────────────────────────────────────────────────────────────────────────────
-FFT_CACHE_DIR = "/home/sam/Halo_Finder/Final_design/SPERR/sperr_fft_cache"
+FFT_CACHE_DIR = P("ADAMIT_CACHE_DIR")
 os.makedirs(FFT_CACHE_DIR, exist_ok=True)
 FORCE_RETRAIN = bool(int(os.environ.get("SPERR_FORCE_RETRAIN", "0")))
 
@@ -1295,7 +1297,7 @@ print("run_neurlz ready | ADD_NEURLZ =", ADD_NEURLZ, "| NEURLZ_FEATURES =", NEUR
 results = {}   # label -> r dict, in the order we want plotted
 
 # ── NYX 512^3 (3 targets) — same configs as SPERR.py, for apples-to-apples CR points ──
-NYX_DIR   = "/home/sam/Halo_Finder/halo_finder_v1/SDRBENCH-EXASKY-NYX-512x512x512/origin/"
+NYX_DIR   = P("ADAMIT_NYX_DIR")
 NYX_SHAPE = (512, 512, 512)
 NYX_ALL   = ["baryon_density", "dark_matter_density", "temperature",
              "velocity_x", "velocity_y", "velocity_z"]
@@ -1366,7 +1368,7 @@ for tname, tkey in NYX_TASK_KEY.items():
     torch.cuda.empty_cache() if torch.cuda.is_available() else None
 
 # ── Miranda 1024^3 ──
-MIR_FILE  = "/home/sam/Halo_Finder/halo_finder_v1/miranda_1024x1024x1024_float32.raw"
+MIR_FILE  = P("ADAMIT_MIRANDA_FILE")
 MIR_SHAPE = (1024, 1024, 1024)
 # Real SZ3+SPERR binary-search realignment to CR 100-500 (was 108-370, and SPERR's
 # side was never actually calibrated here -- this call used to omit
@@ -1398,7 +1400,7 @@ if TASK in ("all", "miranda"):
 
 
 # ── Magnetic Reconnection 512^3 ──
-MAG_FILE  = "/home/sam/Halo_Finder/halo_finder_v1/magnetic_reconnection_512x512x512_float32.raw"
+MAG_FILE  = P("ADAMIT_MAGNETIC_FILE")
 MAG_SHAPE = (512, 512, 512)
 # Real SZ3+SPERR realignment to CR 100-500 (was 173-547, and like Miranda above, SPERR's
 # side had never actually been calibrated in THIS file -- omitted sperr_psnr_offset/
@@ -1431,8 +1433,7 @@ if TASK in ("all", "mag"):
 # along axis0, why axis0 vs axis1/2 are not equivalent, why bo_axes/bo_proxy_stride are
 # needed for BO to be tractable). Already aligned to CR 100-500 across the 5-point
 # QMC_REL sweep -- no recalibration needed here.
-QMC_FILE  = ("/storage/sam/SDRBench/SDRBENCH-QMCPack/"
-             "288x115x69x69/einspline_288_115_69_69.pre.f32")
+QMC_FILE  = P("ADAMIT_QMC_FILE")
 QMC_SHAPE = (33120, 69, 69)
 QMC_REL   = [1.9698e-04, 3.9741e-04, 8.0177e-04, 1.6176e-03, 3.2634e-03]
 QMC_PARAMS, QMC_EPOCHS = int(os.environ.get('SPERR_QMC_PARAMS', '35000')), 10   # 35k (2026-08-19 decision) -> bg_h=23, 34,504 params; 30k was bg_h=21 / 28,858

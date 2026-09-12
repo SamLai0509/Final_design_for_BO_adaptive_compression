@@ -5,7 +5,7 @@
 import os, json, pickle
 import numpy as np
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
-REPO = "/home/sam/Halo_Finder/Final_design"; E = f"{REPO}/Reproduce/experiment"
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); E = f"{REPO}/Reproduce/experiment"
 pins = json.load(open(f"{E}/EXPERIMENT_PINS.json"))
 WITH, WITHOUT = pins["reference (CR-matched siblings)"], pins["no velocity siblings"]
 def load(f):

@@ -3,10 +3,10 @@
 #   NYX baryon density at the CR~500 band (index 4) and NYX temperature at the CR~300 band (index 3),
 #   SZ3 side + SPERR side aligned to the same CR; base / +Ours / +NeurLZ / err_* as .f32 + .vtk (ParaView).
 # Waits for the paper chain (bash Reproduce/run_all.sh) so the GPU is idle.
-REPO=/home/sam/Halo_Finder/Final_design; PY=/home/sam/miniconda3/bin/python
-OUT=/storage/sam/Final_visualization/final_2026-08-29; LOG=$REPO/Reproduce/logs
+REPO=${ADAMIT_REPO:-$(cd "$(dirname "$0")/.." && pwd)}; PY=${PYTHON:-python}
+OUT=${ADAMIT_VIZ_DIR:-$REPO/Reproduce/viz}; LOG=$REPO/Reproduce/logs
 while pgrep -f "bash Reproduce/run_all.sh" > /dev/null; do sleep 60; done
-cd $REPO/SPERR
+cd $REPO/sec_4_evaluation
 echo "[viz] start $(date)" >> $LOG/run_viz.log
 for spec in "nyx_b 4" "nyx_t 3"; do set -- $spec
   echo "[viz] === $1 band $2 start $(date) ===" >> $LOG/run_viz.log

@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """Miranda CR~500 operating point: the two paper-chain samples + N standalone repeats.
 Tabulates Phase-1 pick (axis, lr) and outcome per side, writes miranda_cr500.md and a small figure."""
-import re, glob, os, json
+import os, re, glob, os, json
 import numpy as np
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
-REPO = "/home/sam/Halo_Finder/Final_design"; E = f"{REPO}/Reproduce/experiment/miranda_cr500"; L = f"{REPO}/Reproduce/logs"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))); E = f"{REPO}/Reproduce/experiment/miranda_cr500"; L = f"{REPO}/Reproduce/logs"
 pick_re = re.compile(r"PICK axis(\d) lr=([\d.e+-]+) proxy=[\d.]+ gain=[+\-\d.]+ axis_spread=([\d.]+) lr_spread=([\d.]+)")
 res_re  = re.compile(r"(SZ3|SPERR)\s+([\d.]+)x/\s*([\d.]+)dB.*?\|\s*(?:SZ3\+model|SPERR\+Ours)\s+([\d.]+)x/\s*([\d.]+)dB")
 
@@ -24,7 +24,7 @@ def parse(logfile, want_cr=500.0):
     return out
 
 samples = []
-for name, lf in (("paper chain (08-28 16:28, shuffled)", f"{REPO}/SPERR/run_logs/2026-08-28/shuf6000_miranda.log"),
+for name, lf in (("paper chain (08-28 16:28, shuffled)", f"{REPO}/sec_4_evaluation/run_logs/2026-08-28/shuf6000_miranda.log"),
                  ("paper chain (08-29 03:11 rerun)", f"{L}/miranda.log")):
     if os.path.isfile(lf): samples.append((name, parse(lf)))
 for lf in sorted(glob.glob(f"{E}/rep*.log")):

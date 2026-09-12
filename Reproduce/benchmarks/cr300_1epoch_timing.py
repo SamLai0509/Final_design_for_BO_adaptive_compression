@@ -4,14 +4,15 @@ Every stage is repeated and reported as the median; NYX baryon density 512^3."""
 import os, sys, time, io, contextlib, random
 import numpy as np, torch
 
-sys.path.append("/home/sam/Halo_Finder/Final_design/base_script")
-sys.path.append("/home/sam/Data_Compression/SZ3/tools/pysz")
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "base_script"))
+from local_paths import P
+sys.path.append(P("ADAMIT_PYSZ"))
 from pysz import SZ
 from experiment import build_bg_only_cfg
 from bg_stage import train_bg_only, run_bg_inference, unwrap_bg_model
 from bg_shard import pick_bg_h_under_budget
 
-NB="/home/sam/Halo_Finder/halo_finder_v1/SDRBENCH-EXASKY-NYX-512x512x512/origin/"
+NB=P("ADAMIT_NYX_DIR")
 FIELDS=["baryon_density.f32","temperature.f32","dark_matter_density.f32",
         "velocity_z.f32","velocity_x.f32","velocity_y.f32"]
 SHAPE=(512,512,512); TARGET_EFF_CR=300.0; PARAM_BUDGET=30000; BYTES_PER_PARAM=2
@@ -27,7 +28,7 @@ def psnr(a,b):
 
 vols=[np.fromfile(NB+f,np.float32).reshape(SHAPE) for f in FIELDS]
 gt=vols[0]; orig=gt.nbytes
-sz=SZ("/home/sam/Data_Compression/SZ3/build/lib64/libSZ3c.so")
+sz=SZ(P("ADAMIT_SZ3_LIB"))
 with contextlib.redirect_stdout(io.StringIO()):
     h,npar=pick_bg_h_under_budget(PARAM_BUDGET, shape=SHAPE, n_fields=6, bg_arch="spatial",
                                   h_candidates=list(range(3,256)))

@@ -1,14 +1,16 @@
 # AdaMit — Final Rerun Report (2026-08-29, updated through 2026-09-10)
 
+> **Folder names (2026-09-12):** the repository folders were renamed after the paper sections: `Normalization/`→`sec_3_2_normalization/`, `frequency_head_loss/`→`sec_3_3_frequency_loss/`, `Model_parameter_Scaling/`→`sec_3_4_model_scaling/`, `bf_16_vs_32/`→`sec_3_4_bf16_storage/`, `BO_Adaptive/`→`sec_3_5_bayesian_opt/`, `SPERR/`→`sec_4_evaluation/`; the aux-quality / cascade scripts moved from `Reproduce/` to `sec_3_1_auxiliary_fields/`. Machine paths are now resolved by `base_script/local_paths.py`.
+
 All runs were executed serially on one RTX PRO 6000 (nothing in parallel). Results live in `Reproduce/`,
 experiments in `Reproduce/experiment/`. The original Chinese version of this report is archived at
-`/storage/sam/repo_offload/REPORT_zh_2026-09-11.md`.
+`<storage>/repo_offload/REPORT_zh_2026-09-11.md`.
 
 > Naming note. Sections 4, 7, 8 and 10 use the *internal* cascade labels from the run scripts
 > (**A = DMD → baryon → temperature**, **B = DMD → temperature → baryon**, pins `CASCADE_A/B_CACHES.json`).
 > The paper adopted a single cascade and calls it **cascade A = DMD → temperature → baryon density**,
 > i.e. the internal *B*. Table 2 / Fig. 10 / Fig. 11 / Figs. 1, 3, 12 of the paper use that single cascade
-> (pin `SPERR/sperr_fft_cache/PAPER_ENHANCED_MIXED_CACHES.json`).
+> (pin `sec_4_evaluation/sperr_fft_cache/PAPER_ENHANCED_MIXED_CACHES.json`).
 
 ## 0. One-paragraph summary
 
@@ -100,8 +102,8 @@ Six-dataset summary: SZ3 mean **+3.10 dB** (max +6.28, baryon), NeurLZ mean +0.5
 
 | Figure | File | Notes |
 |---|---|---|
-| Fig. 8 BO example | `Fig8_bo_phase1_phase2.pdf` | NYX half (SZ3, CR-matched aux): pick Y@7.6e-3 → 118.32 dB, best 118.33 (gap 0.01); Miranda half (SPERR): pick X@3.9e-3 → 60.66, best 60.68 (gap 0.02). Mirrored to `BO_Adaptive/NYX_SZ3_Miranda_SPERR_1x4.pdf`; legend/height compacted 09-03 |
-| Fig. 9 PSNR vs CR | `Fig9_psnr_vs_cr.pdf` (decompressed) / `Fig9_psnr_vs_cr_enhanced_mixed.pdf` (paper: NYX rows from the cascade) | mirrored to `SPERR/overleaf_figures/` |
+| Fig. 8 BO example | `Fig8_bo_phase1_phase2.pdf` | NYX half (SZ3, CR-matched aux): pick Y@7.6e-3 → 118.32 dB, best 118.33 (gap 0.01); Miranda half (SPERR): pick X@3.9e-3 → 60.66, best 60.68 (gap 0.02). Mirrored to `sec_3_5_bayesian_opt/NYX_SZ3_Miranda_SPERR_1x4.pdf`; legend/height compacted 09-03 |
+| Fig. 9 PSNR vs CR | `Fig9_psnr_vs_cr.pdf` (decompressed) / `Fig9_psnr_vs_cr_enhanced_mixed.pdf` (paper: NYX rows from the cascade) | mirrored to `sec_4_evaluation/overleaf_figures/` |
 | Fig. 10 FFT vs CR | `Fig10_fft_error_vs_cr.pdf` / `Fig10_fft_error_vs_cr_enhanced_mixed.pdf` | same |
 | Fig. 6 iso-epoch (NYX panels rerun) | `figures/scaling/psnr_vs_cr_isoepoch_nyx_baryon_temp.pdf` | 30k-parameter mean gain: baryon +4.34, temperature +2.35 (3k: +3.09 / +1.22); the capacity effect stays monotonic (+0.2–0.4 dB per step). Data `isoepoch_nyx_crmatched.json` |
 | bf16 vs fp32 | `bf16_vs_fp32_1x2.pdf` | NYX: base 117.34, fp32 121.49, bf16 121.34 (Δ +0.16 dB); Miranda: 52.38 / 55.39 / 55.40 (Δ −0.01). The old figure's NYX 124.89 / 125.22 were lossless-aux numbers |
@@ -141,20 +143,20 @@ Reading:
 - More than half of the lossless-sibling +12 dB comes from leaked information and is not decoder-reproducible.
 
 The cascade costs no storage (each field's model is already charged to its own CR); the decoder simply
-decodes → enhances in order. Enhanced volumes: `/storage/sam/Final_visualization/cascade_2026-08-29/` (26 GB).
+decodes → enhances in order. Enhanced volumes: `<storage>/Final_visualization/cascade_2026-08-29/` (26 GB).
 
 ## 5. Miscellaneous
 
-- **ParaView volumes**: `/storage/sam/Final_visualization/final_2026-08-29/` — `NYX_{baryon_density,temperature}_{sz3,sperr}_cr*/`
+- **ParaView volumes**: `<storage>/Final_visualization/final_2026-08-29/` — `NYX_{baryon_density,temperature}_{sz3,sperr}_cr*/`
   with `base/ours/neurlz.{f32,vtk}`, `err_*.f32`, `meta.json`. Later iso-CR exports for Figs. 1/12: `NYX_baryon_density_sz3_cr503/`
   (SZ3 503.4 / NeurLZ 500.2), `enhanced/NYX_baryon_density_sz3_cr530/ours` (cascade, 500.6× / 118.7 dB),
   `NYX_temperature_sz3_cr501/` (SZ3 501.5 / NeurLZ 498.3), `enhanced_b/NYX_temperature_sz3_cr531/ours` (stage-2 enhanced, 501.1× / 76.28 dB).
 - **NeurLZ code check**: it trains and infers on decompressed auxiliaries with `rel_list = [rel]*n` (same rel for
   every field); the paper's "1E-5 for DMD" in its Fig. 8 is illustrative. Our protocol matches "same decompressed
   siblings for train and inference" and differs only in matching by CR level instead of rel.
-- Reproduction: `Reproduce/run_all.sh` (six datasets + Fig. 8) → `collect.py`; experiments `run_cascade_6000.sh`,
-  `run_novel_6000.sh`, `experiment/collect_experiments.py`; figures `Model_parameter_Scaling/isoepoch_nyx_rerun.py`,
-  `bf_16_vs_32/bf16_rerun.py`.
+- Reproduction: `Reproduce/run_all.sh` (six datasets + Fig. 8) → `collect.py`; experiments `../sec_3_1_auxiliary_fields/run_cascade_6000.sh`,
+  `../sec_3_1_auxiliary_fields/run_novel_6000.sh`, `experiment/collect_experiments.py`; figures `sec_3_4_model_scaling/isoepoch_nyx_rerun.py`,
+  `sec_3_4_bf16_storage/bf16_rerun.py`.
 
 ## 6. Paper edits implied by the rerun (checklist)
 
@@ -227,9 +229,9 @@ from the *single* cascade DMD → temperature → baryon (internal B); the NeurL
 runs so that "NeurLZ uses decompressed auxiliaries only" holds. Baryon row at CR≈500: SZ3 +7.49 dB, FFT-mag ≈ −50%;
 temperature (stage 2) +3.11 dB.
 
-## 9. Addendum (08-29 17:35): normalization ablation rerun (`Normalization/norm_cr_time_temperature.pdf`)
+## 9. Addendum (08-29 17:35): normalization ablation rerun (`sec_3_2_normalization/norm_cr_time_temperature.pdf`)
 
-`Normalization/norm_rerun.py` executes the notebook's own BasicUNet trainer (NeurLZ-style: (4,)×6, lr 1e-2,
+`sec_3_2_normalization/norm_rerun.py` executes the notebook's own BasicUNet trainer (NeurLZ-style: (4,)×6, lr 1e-2,
 batch 10, 100 epochs, pure MSE); the only change is that the 5 siblings are the CR-matched decompressed copies
 (CR 73 → level 100 … CR 560 → level 600, the 600 level built on the fly). Data: `norm_rerun_results.json`.
 
@@ -247,7 +249,7 @@ Same conclusion, smaller margin: Z-score beats Min-Max at every point (+0.4 to +
 +3 to +6). In the time panel Min-Max still sits at the base level for the first ~55 s while Z-score rises within 5 s
 (this slow start is caused by the normalization itself, not by the siblings).
 
-### 9b. Same ablation on baryon density (08-29 18:35, `Normalization/norm_cr_time_baryon_density.pdf`)
+### 9b. Same ablation on baryon density (08-29 18:35, `sec_3_2_normalization/norm_cr_time_baryon_density.pdf`)
 
 `NORM_TARGET=baryon_density NORM_RELS=1e-6,…,1.4e-5 python norm_rerun.py` (siblings = CR-matched decompressed
 temperature/DMD/velocity; data `norm_rerun_results_baryon_density.json`).
@@ -270,7 +272,7 @@ This panel is the one used in the paper (Fig. 4).
 
 ## 10. Aux-quality ladder (08-31, figure for the new methodology paragraph)
 
-`Reproduce/run_auxq_ablation.sh` (RTX 6000, paper protocol) added original-aux and no-aux runs for NYX baryon and
+`sec_3_1_auxiliary_fields/run_auxq_ablation.sh` (RTX 6000, paper protocol) added original-aux and no-aux runs for NYX baryon and
 temperature; enhanced = cascade pins, decompressed = PAPER_FINAL pin. Figure `Reproduce/figures/nyx_aux_quality_ladder.pdf`
 (final version: single cascade DMD → temperature → baryon; temperature panel = stage 2, baryon panel = stage 3;
 temperature left, baryon right), pins `results/AUXQ_LADDER_PINS.json`. SZ3 gains over the 5 bands vs SZ3 base:
@@ -355,7 +357,7 @@ best checkpoint within 100 epochs for both compressors (hence SZ3 DMD = +3.14 / 
 ## 12. Code cleanup and validation (09-10)
 
 See `Reproduce/CLEANUP_PLAN.md`. The repository was slimmed for the GitHub push (`_archive_2026-09-10/`, data on
-`/storage/sam/repo_offload/`, `SDRBench` moved to `/storage/sam/SDRBench`), `SPERR_fft.py` trimmed to the six paper
+`<storage>/repo_offload/`, `SDRBench` moved to `<storage>/SDRBench`), `SPERR_fft.py` trimmed to the six paper
 datasets, and `base_script/` reduced to the paper model (spatial micro U-Net + three-band heads; `train_bg_only`
 856 → 515 lines). Validation: old vs new model bit-identical; forced `--task nyx_b` reproduces the pinned base CRs and
 gains within Phase-1 noise; forced `--task qmcpack` reproduces the pinned pkl **byte-for-byte**; the BO notebook

@@ -1,19 +1,19 @@
 #!/bin/bash
 # Paper-final run, end to end, on the paper GPU (cuda:0 = RTX PRO 6000). Nothing else may use the
 # machine while this runs: every stage is wall-clock budgeted.
-#   config: SPERR/SPERR_fft.py defaults (shuffled slice sampling, lr in [1e-3, 1e-2], CR-matched siblings,
+#   config: sec_4_evaluation/SPERR_fft.py defaults (shuffled slice sampling, lr in [1e-3, 1e-2], CR-matched siblings,
 #           10% Phase-1 split, no trust gates) -- see Reproduce/REPRODUCE.ipynb §1 for the full table.
 #   ~4.5 h: aux archive (cached, ~2 min) -> qmcpack (~45 min) -> nyx_b/t/d (~16 min each) -> mag (~15 min)
 #           -> miranda (~1.5 h) -> Fig. 8 NYX (~5 min) -> Fig. 8 Miranda (~20 min) -> collect (~3 min)
 set -u
-REPO=/home/sam/Halo_Finder/Final_design
-PY=/home/sam/miniconda3/bin/python; JUP=/home/sam/miniconda3/bin/jupyter
+REPO=${ADAMIT_REPO:-$(cd "$(dirname "$0")/.." && pwd)}
+PY=${PYTHON:-python}; JUP=${JUPYTER:-jupyter}
 OUT=${ADAMIT_REPRODUCE_DIR:-$REPO/Reproduce}; LOGS=$OUT/logs; mkdir -p $LOGS
 if [ "$OUT" = "$REPO/Reproduce" ]; then export BO_OUT_SUFFIX=_final; else export BO_OUT_SUFFIX=_final_$(basename $OUT); fi
 date +%s > $LOGS/RUN_START
 echo "[run_all] start $(date)" >> $LOGS/run_all.log
 
-cd $REPO/SPERR
+cd $REPO/sec_4_evaluation
 CUDA_VISIBLE_DEVICES="" $PY SPERR_fft.py --task aux_prep > $LOGS/aux_prep.log 2>&1
 echo "[run_all] aux_prep exit=$? $(date)" >> $LOGS/run_all.log
 for T in qmcpack nyx_b nyx_t nyx_d mag miranda; do
@@ -23,7 +23,7 @@ for T in qmcpack nyx_b nyx_t nyx_d mag miranda; do
 done
 
 # Fig. 8: NYX (SZ3 base, CR-matched siblings) and Miranda (SPERR base), same lr window / sampling
-cd $REPO/BO_Adaptive
+cd $REPO/sec_3_5_bayesian_opt
 $PY - <<'EOF'
 import json
 nb = json.load(open("nyx_miranda.ipynb")); nb["cells"] = nb["cells"][:6]

@@ -3,13 +3,13 @@
 
     python Reproduce/collect.py [--since EPOCH_SECONDS]
 
-Picks, per dataset, the newest SPERR/sperr_fft_cache/<name>__*.pkl modified after --since (default: the
+Picks, per dataset, the newest sec_4_evaluation/sperr_fft_cache/<name>__*.pkl modified after --since (default: the
 timestamp in Reproduce/logs/RUN_START, else 0), pins them as Reproduce/results/PAPER_FINAL_CACHES.json, and
 then rebuilds every table/figure from that pin only.
 """
 import os, sys, json, glob, shutil, subprocess, time
-REPO = "/home/sam/Halo_Finder/Final_design"
-SPERR, BO = f"{REPO}/SPERR", f"{REPO}/BO_Adaptive"
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SPERR, BO = f"{REPO}/sec_4_evaluation", f"{REPO}/sec_3_5_bayesian_opt"
 OUT = os.environ.get("ADAMIT_REPRODUCE_DIR", f"{REPO}/Reproduce")
 IS_MAIN = os.path.abspath(OUT) == f"{REPO}/Reproduce"      # only the main deliverable updates repo-wide copies
 SUF = os.environ.get("BO_OUT_SUFFIX", "_final")              # Fig. 8 pickle suffix used by the chain
@@ -110,7 +110,7 @@ else:
     print("  [warn] Fig. 8 pickles missing -- skipped")
 
 # ── 5. figures that are not regenerated here (model-size scaling), benchmarks, logs ─────────
-for f in glob.glob(f"{REPO}/Model_parameter_Scaling/psnr_vs_cr_isoepoch_*.pdf") + glob.glob(f"{REPO}/Model_parameter_Scaling/psnr_vs_cr_isoepoch_*.png"):
+for f in glob.glob(f"{REPO}/sec_3_4_model_scaling/psnr_vs_cr_isoepoch_*.pdf") + glob.glob(f"{REPO}/sec_3_4_model_scaling/psnr_vs_cr_isoepoch_*.png"):
     shutil.copy2(f, f"{FIG}/scaling")
 for f in glob.glob(f"{REPO}/benchmarks/*"):
     if os.path.isfile(f) and not f.endswith("make_reproduce_nb.py"):

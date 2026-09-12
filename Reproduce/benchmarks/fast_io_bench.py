@@ -2,7 +2,7 @@
 
 Reports, for each pipeline, the wall time of every stage a producer/consumer actually
 pays: compress, write to SSD, read from SSD, decompress, plus (for the learned methods)
-train and inference. I/O goes to the NVMe SSD (/home/sam, nvme0n1p2); every write is
+train and inference. I/O goes to a local NVMe SSD (ADAMIT_IO_BENCH_TMP); every write is
 fsync'ed and every file is evicted from the page cache with posix_fadvise(DONTNEED)
 before it is read back, so the read column is real device I/O, not RAM.
 
@@ -18,16 +18,17 @@ import os, sys, time, io, contextlib, random, json
 import numpy as np
 import torch
 
-sys.path.append("/home/sam/Halo_Finder/Final_design/base_script")
-sys.path.append("/home/sam/Data_Compression/SZ3/tools/pysz")
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "base_script"))
+from local_paths import P
+sys.path.append(P("ADAMIT_PYSZ"))
 from pysz import SZ
 from experiment import build_bg_only_cfg
 from bg_stage import train_bg_only, run_bg_inference, unwrap_bg_model
 from bg_shard import pick_bg_h_under_budget
 from monai.networks.nets import BasicUNet
 
-SSD_DIR = "/home/sam/fast_io_bench_tmp"      # on nvme0n1p2 (ROTA=0)
-NB      = "/home/sam/Halo_Finder/halo_finder_v1/SDRBENCH-EXASKY-NYX-512x512x512/origin/"
+SSD_DIR = P("ADAMIT_IO_BENCH_TMP")      # put this on a fast local SSD
+NB      = P("ADAMIT_NYX_DIR")
 SHAPE   = (512, 512, 512)
 TARGET_CR = 300.0
 FIELDS  = ["baryon_density.f32", "temperature.f32", "dark_matter_density.f32",
@@ -70,7 +71,7 @@ def med(f, reps=REPS):
 print("loading NYX ...", flush=True)
 vols = [np.fromfile(NB + f, np.float32).reshape(SHAPE) for f in FIELDS]
 gt = vols[0]; orig_bytes = gt.nbytes
-sz = SZ("/home/sam/Data_Compression/SZ3/build/lib64/libSZ3c.so")
+sz = SZ(P("ADAMIT_SZ3_LIB"))
 
 lo, hi = 1e-7, 1e-3
 for _ in range(18):

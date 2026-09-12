@@ -1,8 +1,8 @@
 #!/bin/sh
 # Aux-quality ladder for the methodology figure: original-aux and no-aux runs of
 # NYX baryon + temperature on the paper GPU (cuda:0 = RTX PRO 6000), paper protocol.
-REPO=/home/sam/Halo_Finder/Final_design; PY=/home/sam/miniconda3/bin/python
-L=$REPO/Reproduce/logs/auxq_ablation.log; cd $REPO/SPERR
+REPO=${ADAMIT_REPO:-$(cd "$(dirname "$0")/.." && pwd)}; PY=${PYTHON:-python}
+L=$REPO/Reproduce/logs/auxq_ablation.log; cd $REPO/sec_4_evaluation
 for task in nyx_b nyx_t; do
   echo "[auxq] === origaux $task start $(date) ===" >> $L
   SPERR_AUX_MODE=orig $PY -u SPERR_fft.py --task $task >> $L 2>&1

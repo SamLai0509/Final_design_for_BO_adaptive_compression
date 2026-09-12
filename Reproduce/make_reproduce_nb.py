@@ -1,4 +1,4 @@
-"""Generate /home/sam/Halo_Finder/Final_design/REPRODUCE.ipynb (AdaMit reproducibility guide)."""
+"""Generate Reproduce/REPRODUCE.ipynb (AdaMit reproducibility guide)."""
 import nbformat as nbf
 
 nb = nbf.v4.new_notebook()
@@ -14,15 +14,15 @@ This notebook is the single entry point for reproducing every number and figure 
 
 | mode | what it does | time |
 |---|---|---|
-| **from cache** (default, this notebook as saved) | loads the pinned result caches (`SPERR/sperr_fft_cache/*.pkl`), rebuilds every table and figure | minutes, no GPU |
+| **from cache** (default, this notebook as saved) | loads the pinned result caches (`sec_4_evaluation/sperr_fft_cache/*.pkl`), rebuilds every table and figure | minutes, no GPU |
 | **from scratch** | `bash Reproduce/run_all.sh` re-runs the six-field pipeline and the Fig. 8 study, then `Reproduce/collect.py` rebuilds this folder and this notebook | ≈ 4.5 h on one RTX PRO 6000 (see §3) |
 
-Everything the paper reports comes from one pipeline script, **`SPERR/SPERR_fft.py`**, plus a handful of standalone
+Everything the paper reports comes from one pipeline script, **`sec_4_evaluation/SPERR_fft.py`**, plus a handful of standalone
 notebooks for the ablation / analysis figures (§5–§9 below). Each section states *which paper element* it reproduces,
 *how it was run*, and *shows the result*.
 
-> **Paths are hard-coded** (`/home/sam/...`, see `README.md`). To run from scratch on another machine edit the
-> data / SZ3 / SPERR paths at the top of `SPERR/SPERR_fft.py`; the cache-reading cells below work anywhere the repo is checked out.
+> **Machine-specific paths** are resolved by `base_script/local_paths.py` (environment variables or `local_paths.env`, see `README.md`). To run from scratch on another machine set the
+> data / SZ3 / SPERR paths at the top of `sec_4_evaluation/SPERR_fft.py`; the cache-reading cells below work anywhere the repo is checked out.
 """)
 
 code(r"""
@@ -30,7 +30,7 @@ import os, sys, json, glob, pickle, re, subprocess, time
 import numpy as np
 from IPython.display import Image, display, Markdown
 
-REPO  = "/home/sam/Halo_Finder/Final_design"
+REPO  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPERR = f"{REPO}/SPERR"
 OUT   = "__ADAMIT_OUT__"
 CACHE = f"{OUT}/results"                # pinned copies of the result pickles (collect.py)
@@ -42,7 +42,7 @@ import paper_numbers as pn          # the paper's number definitions (iso-PSNR C
 # ── which six-field run the tables/figures below are built from ────────────────────────
 #   PAPER_FINAL_CACHES.json  the paper-final run (Reproduce/run_all.sh): shuffled slice order, lr in [1e-3, 1e-2] (as in Sec. 3.5), CR-matched decompressed siblings, no trust gates
 #   PAPER_V3_CACHES.json     the 2026-08-16 run behind the first draft (random sampling, lossless siblings, lr [1e-4,3e-3], gates on) -- for old->new tables
-#   (the SPERR/sperr_fft_cache/ directory keeps every intermediate run: *_SEQ_CRMATCHED_*, *_SHUF_CRMATCHED_* = the 2026-08-28 sequential/shuffled chains at lr max 1e-2)
+#   (the sec_4_evaluation/sperr_fft_cache/ directory keeps every intermediate run: *_SEQ_CRMATCHED_*, *_SHUF_CRMATCHED_* = the 2026-08-28 sequential/shuffled chains at lr max 1e-2)
 PIN = os.environ.get("ADAMIT_PIN", "PAPER_FINAL_CACHES.json")
 print("available pins:", sorted(os.path.basename(p) for p in glob.glob(f"{CACHE}/*.json")))
 print("using:", PIN)
@@ -55,7 +55,7 @@ md(r"""
 ## 1. Environment, platform and data
 
 * Python 3 + `numpy`, `torch` (CUDA), `matplotlib`, `optuna`, `monai` (only for the NeurLZ baseline's `BasicUNet`), `pysz` (SZ3's Python wrapper). `pip install -r requirements.txt` covers the pip part.
-* **SZ3** (`libSZ3c.so` + `tools/pysz`) and **SPERR** (`sperr3d` binary) built separately; paths are set at the top of `SPERR/SPERR_fft.py` (`SZ3_LIB`, `PYSZ_PATH`, `SPERR_BIN`).
+* **SZ3** (`libSZ3c.so` + `tools/pysz`) and **SPERR** (`sperr3d` binary) built separately; paths are set at the top of `sec_4_evaluation/SPERR_fft.py` (`SZ3_LIB`, `PYSZ_PATH`, `SPERR_BIN`).
 * **Paper platform**: one NVIDIA RTX PRO 6000 Blackwell (cuda:0 on this machine), 20-core host, 62 GB RAM. All time-budgeted results (every table/figure below) were produced on this GPU with nothing else running on the machine — the pipeline is *wall-clock budgeted*, so a slower/contended GPU trains fewer steps and gives lower PSNR.
 
 Datasets (SDRBench single-precision volumes, all `float32` raw files):
@@ -138,7 +138,7 @@ md(r"""
 ## 3. How to run the pipeline (from scratch)
 
 All six datasets are driven by one script; each `--task` computes one dataset and writes its result to
-`SPERR/sperr_fft_cache/<name>__<config-hash>.pkl` (the hash covers every constant in the table above, so a changed
+`sec_4_evaluation/sperr_fft_cache/<name>__<config-hash>.pkl` (the hash covers every constant in the table above, so a changed
 setting never silently reuses an old result; `SPERR_FORCE_RETRAIN=1` overrides a cache hit).
 
 ```bash
@@ -169,7 +169,7 @@ What one operating point does (per rel band, per base compressor):
 5. **NeurLZ** on the same `X′`, same siblings, same total wall-clock (Phase 1 + Phase 2), parameter-matched;
 6. record CR (base bytes + bf16 model bytes), PSNR, FFT magnitude/phase errors for base / +Ours / +NeurLZ.
 
-Run logs of the paper run are in `Reproduce/logs/` (one log per task, plus `run_all.log` with start/exit stamps); the exploratory 2026-08-28 chains are under `SPERR/run_logs/2026-08-28/`.
+Run logs of the paper run are in `Reproduce/logs/` (one log per task, plus `run_all.log` with start/exit stamps); the exploratory 2026-08-28 chains are under `sec_4_evaluation/run_logs/2026-08-28/`.
 """)
 
 code(r"""
@@ -180,7 +180,7 @@ print(open(f"{OUT}/run_all.sh").read())
 md(r"""
 ## 4. Rate–distortion results (Sec. 4.2 — Fig. 9, Fig. 10, Table 2)
 
-Everything below is computed from the pinned caches with the exact definitions used in the paper (`SPERR/paper_numbers.py`):
+Everything below is computed from the pinned caches with the exact definitions used in the paper (`sec_4_evaluation/paper_numbers.py`):
 
 * **gain** = PSNR(base + X) − PSNR(base) at the same operating point;
 * **iso-PSNR CR gain** = CR_ours / CR_ref − 1, where CR_ref is the reference curve's CR at PSNR(ours) (log-CR linear in PSNR; `*` marks extrapolation beyond the reference curve);
@@ -246,10 +246,10 @@ print("\nDecompressed-sibling PSNRs per level are printed by `python SPERR_fft.p
 md(r"""
 ## 5. Phase-1 search figure (Sec. 3.5 / Fig. 8)
 
-`BO_Adaptive/nyx_miranda.ipynb` (SZ3 base) and `BO_Adaptive/nyx_miranda_sperr.ipynb` (SPERR base) run the *standalone* two-phase
+`sec_3_5_bayesian_opt/nyx_miranda.ipynb` (SZ3 base) and `sec_3_5_bayesian_opt/nyx_miranda_sperr.ipynb` (SPERR base) run the *standalone* two-phase
 study: Phase 1 = 10 TPE trials over lr ∈ [1e-3, 1e-2] (log) × slice axis on the proxy (10 % of the budget, no timeout),
 Phase 2 = every (axis, lr) candidate trained at full resolution so the proxy's pick can be compared with the true optimum.
-Results are pickled to `BO_Adaptive/bo_results/{sz3_nyx,sperr_mir}.pkl`; `BO_Adaptive/bo_combined_plot.ipynb` draws the
+Results are pickled to `sec_3_5_bayesian_opt/bo_results/{sz3_nyx,sperr_mir}.pkl`; `sec_3_5_bayesian_opt/bo_combined_plot.ipynb` draws the
 composite (NYX on SZ3 at CR≈440 left, Miranda on SPERR at CR≈145 right) → `Reproduce/figures/Fig8_bo_phase1_phase2.pdf` (pickles in `Reproduce/results/bo/`).
 Other lr windows explored are archived as `bo_results/lr5e-4_3e-3/`, `bo_results/lr1e-3_1e-2/` and the `*_lr*.pdf` backups.
 
@@ -276,8 +276,8 @@ display(Image(f"{FIGS}/Fig8_bo_phase1_phase2.png", width=1000))
 md(r"""
 ## 6. Model-size scaling at matched epochs (Sec. 4.x — iso-epoch figure)
 
-`Model_parameter_Scaling/nyx_miranda_isoepoch.ipynb` (NYX baryon + Miranda; Miranda budgets 75k/136k/240k/400k/500k params) and
-`Model_parameter_Scaling/nyx_temp_qmcpack_isoepoch.ipynb` (NYX temperature + QMCPack, 3k–30k params) train every model size for the
+`sec_3_4_model_scaling/nyx_miranda_isoepoch.ipynb` (NYX baryon + Miranda; Miranda budgets 75k/136k/240k/400k/500k params) and
+`sec_3_4_model_scaling/nyx_temp_qmcpack_isoepoch.ipynb` (NYX temperature + QMCPack, 3k–30k params) train every model size for the
 same `FIXED_EPOCHS = 10` at each of the five rel bands, so the comparison isolates capacity from wall-clock. Outputs:
 `psnr_vs_cr_isoepoch_nyx_miranda500k.pdf`, `psnr_vs_cr_isoepoch_nyxtemp_qmcpack.pdf`, `psnr_vs_cr_isoepoch_nyx_baryon_temp.pdf`.
 """)
@@ -320,12 +320,12 @@ per-z-chunk sharded-expert ablation.
 
 | paper element | notebook / script | output |
 |---|---|---|
-| frequency head & split-band loss ablation | `frequency_head_loss/frequency_loss.ipynb`, `frequency_head.ipynb`, `fft_err.ipynb` | figures in that folder |
-| normalization ablation (z-score vs min-max, Sec. 3.2 / Discussion) | `Normalization/normalization.ipynb`; `Discussion/gen_norm_discussion.py` | `Normalization/ablation_norm_temperature.pdf`, `Discussion/norm_hist_nyx_baryon*.pdf` |
+| frequency head & split-band loss ablation | `sec_3_3_frequency_loss/frequency_loss.ipynb`, `frequency_head.ipynb`, `fft_err.ipynb` | figures in that folder |
+| normalization ablation (z-score vs min-max, Sec. 3.2 / Discussion) | `sec_3_2_normalization/normalization.ipynb`; `Discussion/gen_norm_discussion.py` | `sec_3_2_normalization/ablation_norm_temperature.pdf`, `Discussion/norm_hist_nyx_baryon*.pdf` |
 | NeurLZ training trajectory (Discussion) | `Discussion/gen_neurlz_traj.py` → `neurlz_traj_plot.ipynb` | `Discussion/neurlz_traj_nyx_baryon.pdf` |
-| bf16 vs fp32 weights | `bf_16_vs_32/bf_16.ipynb` | — |
+| bf16 vs fp32 weights | `sec_3_4_bf16_storage/bf_16.ipynb` | — |
 | 2.5-D slab model variant | `25Dmodel/25Dslab.ipynb` | — |
-| qualitative slices / zooms (Miranda at CR 1000 / 2000 on SPERR) | `Final_visualization/make_viz_data.ipynb` (cell `miranda-sperr-hicr`), `figures/visualization.ipynb` | `/storage/sam/Final_visualization/miranda_temperature_aligned/` |
+| qualitative slices / zooms (Miranda at CR 1000 / 2000 on SPERR) | `Final_visualization/make_viz_data.ipynb` (cell `miranda-sperr-hicr`), `figures/visualization.ipynb` | `<storage>/Final_visualization/miranda_temperature_aligned/` |
 
 ## 10. Provenance
 
@@ -335,14 +335,14 @@ per-z-chunk sharded-expert ablation.
 * `Reproduce/logs/`: one log per task of the run, `run_all.log` with start/exit stamps, `RUN_START`, the executed Fig. 8 notebooks.
 * `Reproduce/benchmarks/`: the CR≈300 timing and NVMe I/O benchmark scripts, logs and JSON.
 * `Reproduce/run_all.sh` reproduces all of the above from scratch; `Reproduce/collect.py` rebuilds this folder (and this notebook) from the caches.
-* Repo-wide: `SPERR/sperr_fft_cache/` keeps every run (`<dataset>__<hash>.pkl`, one hash per configuration) and the sibling archive `aux_streams/`;
-  `SPERR/overleaf_figures/` holds the figure copies handed to Overleaf; `SPERR/run_logs/` the exploratory chains.
+* Repo-wide: `sec_4_evaluation/sperr_fft_cache/` keeps every run (`<dataset>__<hash>.pkl`, one hash per configuration) and the sibling archive `aux_streams/`;
+  `sec_4_evaluation/overleaf_figures/` holds the figure copies handed to Overleaf; `sec_4_evaluation/run_logs/` the exploratory chains.
 """)
 
 nb["cells"] = cells
 nb.metadata["kernelspec"] = {"name": "python3", "display_name": "Python 3", "language": "python"}
 import os
-OUTDIR = os.environ.get("ADAMIT_REPRODUCE_DIR", "/home/sam/Halo_Finder/Final_design/Reproduce")
+OUTDIR = os.environ.get("ADAMIT_REPRODUCE_DIR", os.path.join(REPO, "Reproduce"))
 out = f"{OUTDIR}/REPRODUCE.ipynb"
 for c in nb["cells"]:
     c["source"] = c["source"].replace("__ADAMIT_OUT__", OUTDIR)

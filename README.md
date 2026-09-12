@@ -23,17 +23,20 @@ CR = original_bytes / (base_stream_bytes + model_param_bytes)      # aux fields 
 
 | Folder | What it is |
 |---|---|
-| **`base_script/`** | The core library (imported by every experiment). `bg_stage.py` (train/inference), `experiment.py` (config builder + size budgeting), `bg_shard.py` (model-size selection + sharded training), `bg_normalize.py` / `bg_sampling.py` (helpers), `frequency_losses.py`, `config_io.py` (SZ3 I/O), `metrics.py`, `siren_fft_backbone_model.py` (`UNET_Model`), `train.py` (`TrainConfig`), `Patch_data.py` (samplers). |
-| `BO_Adaptive/` | Two-phase BO of learning rate / slice direction (`lr_slice_direction_*` notebooks; `lr_*.py` DDP scripts). |
-| `Model_parameter_Scaling/` | PSNR-vs-CR sweeps over **model size × error bound** (NYX, Miranda, Magnetic, S3D, Hurricane), with the per-`rel` Phase-1 → Phase-2 pipeline. |
-| `frequency_head_loss/` | Ablation of the frequency head and frequency loss. |
-| `Normalization/` | Input / residual normalization ablation (z-score vs min-max). |
-| `MultiGPU_DDP/` | Multi-GPU data-parallel / DDP training and the sharded-expert (per-z-chunk) scheme. |
-| `SPERR/` | SZ3+model vs **SPERR** (and SPERR+model) comparison across datasets. |
+| **`base_script/`** | The core library (imported by every experiment). `bg_stage.py` (train / inference), `experiment.py` (config builder + model-size budgeting), `siren_fft_backbone_model.py` (`UNET_Model`: micro U-Net backbone + low/mid/high heads), `frequency_losses.py` (dual-domain FFT loss), `bg_sampling.py` / `Patch_data.py` (GPU-resident slice samplers), `bg_normalize.py` (Z-score normalization), `config_io.py` (SZ3 I/O, seeding, error-bound clamp), `bg_shard.py` (model-size selection + sharded/DDP helpers), `train.py` (`TrainConfig`). |
+| **`SPERR/`** | The paper pipeline: `SPERR_fft.py --task {nyx_b,nyx_t,nyx_d,miranda,mag,qmcpack}` runs SZ3 / SPERR, AdaMit and NeurLZ on one dataset and caches the result in `sperr_fft_cache/`; `--task aux_prep` archives the matched-CR auxiliary streams; `--task neurlz_long` is the NeurLZ cost study. `paper_numbers.py`, `plot_paper_figs.py`, `plot_paper_fft.py` turn pinned caches into the paper's numbers and figures. |
+| **`Reproduce/`** | Reproducibility package: `run_all.sh` (whole chain), `collect.py` (pin + figures + numbers), `REPRODUCE.ipynb`, `REPORT.md` (results report), `HANDOFF.md`, `results/` (cache pins), `figures/`, `experiment/` (sibling-protocol, cascade and NeurLZ-cost experiments), `logs/`. |
+| `BO_Adaptive/` | Two-phase Bayesian optimization example (Fig. 9): `nyx_miranda*.ipynb`, `bo_combined_plot.ipynb`. |
+| `Model_parameter_Scaling/` | Model-size sweep at fixed epochs (Fig. 7): `nyx_miranda_isoepoch.ipynb`, `isoepoch_nyx_rerun.py`. |
+| `Normalization/` | Z-score vs Min-Max ablation (Fig. 4): `normalization.ipynb`, `norm_rerun.py`. |
+| `frequency_head_loss/` | Frequency head / loss ablation (Fig. 6): `fft_err.ipynb`. |
+| `bf_16_vs_32/` | BF16 vs FP32 model storage (Fig. 8): `bf_16.ipynb`, `bf16_rerun.py`. |
+| `MultiGPU_DDP/` | Multi-GPU data-parallel / DDP training (Table 4, Fig. 14): `parallel_compute.ipynb`, `data_parallel_for_{NYX,Miranda}.py`. |
+| `figures/` | Architecture diagrams (pipeline, U-Net block) as SVG/PDF. |
 
-The experiment notebooks/scripts add `base_script/` to `sys.path` and import its modules
-by bare name (`from bg_stage import ...`). `base_script/` is self-contained — it does not
-depend on any other folder.
+Superseded notebooks and figures live in `_archive_*/` (not tracked). The experiment
+notebooks/scripts add `base_script/` to `sys.path` and import its modules by bare name
+(`from bg_stage import ...`); `base_script/` does not depend on any other folder.
 
 ## Prerequisites
 
@@ -63,6 +66,8 @@ sz_lib_path = "/home/sam/Data_Compression/SZ3/build/lib64/libSZ3c.so"
 
 1. Install the Python deps and make SZ3/`pysz` (and SPERR for `SPERR/`) importable/available.
 2. Edit the absolute paths at the top of the chosen notebook/script to your data + SZ3/SPERR locations.
-3. Open a notebook (e.g. `Model_parameter_Scaling/Miranda_parameters.ipynb`) and run all
-   cells with the Python kernel that has `numpy`/`torch`/`pysz`, or run a DDP script
-   (e.g. `torchrun --nproc_per_node=4 BO_Adaptive/lr_NYX.py`).
+3. Run one dataset of the paper pipeline, e.g. `cd SPERR && python SPERR_fft.py --task nyx_b`
+   (results are cached in `SPERR/sperr_fft_cache/`), or the whole chain with
+   `Reproduce/run_all.sh` followed by `python Reproduce/collect.py`. Ablation notebooks
+   (Figs. 4, 6, 7, 8, 9) run cell-by-cell with a kernel that has `numpy`/`torch`/`pysz`;
+   multi-GPU runs use `torchrun --nproc_per_node=4 MultiGPU_DDP/data_parallel_for_NYX.py`.

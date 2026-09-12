@@ -1,0 +1,8 @@
+{
+ "Baryon": "NYX_baryon_density__bd05a42f7881.pkl",
+ "Temp": "NYX_temperature__e098e8647e54.pkl",
+ "DMD": "NYX_dark_matter_density__bb3e0bab0a5a.pkl",
+ "Miranda": "Miranda__dfe9fb03b467.pkl",
+ "QMC": "QMCPack__037d47dea6d5.pkl",
+ "Magnetic": "Magnetic__34d6dbbb7c8e.pkl"
+}

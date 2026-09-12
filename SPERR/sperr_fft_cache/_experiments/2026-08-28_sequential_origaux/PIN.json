@@ -1,0 +1,6 @@
+{
+ "Baryon": "NYX_baryon_density__acccba1c79e6.pkl",
+ "Temp": "NYX_temperature__e0bdcd2b070c.pkl",
+ "DMD": "NYX_dark_matter_density__04017e1895f0.pkl",
+ "_note": "sequential sampling, ORIGINAL (lossless) siblings, lr [1e-3,1e-2], no gates -- the reference side of the aux-protocol cost table (orig -> CR-matched)"
+}

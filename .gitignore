@@ -42,3 +42,14 @@ Reproduce/**
 !Reproduce/**/*.py
 !Reproduce/**/*.md
 !Reproduce/**/*.sh
+
+# previews and stale side results (2026-09-12)
+*.png
+!figures/panels/*.png
+BO_Adaptive/bo_results/*
+!BO_Adaptive/bo_results/*_final.pkl
+BO_Adaptive/NYX_Miranda_1x4.pdf
+SPERR/run_logs/
+SPERR/overleaf_figures/*
+!SPERR/overleaf_figures/sperr_cmp_all6_3x2.pdf
+!SPERR/overleaf_figures/sperr_fft_all6.pdf

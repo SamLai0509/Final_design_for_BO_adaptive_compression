@@ -1,0 +1,6 @@
+{
+ "Baryon": "NYX_baryon_density__1cb97d57d925.pkl",
+ "Temp": "NYX_temperature__f8d1ea9d8e9b.pkl",
+ "DMD": "NYX_dark_matter_density__4cced88aaad9.pkl",
+ "_note": "no-aux (single-field) ablation, 5090 pinned to 4 cores / nice 19, shuffled, lr [1e-3,1e-2] -- indicative only"
+}

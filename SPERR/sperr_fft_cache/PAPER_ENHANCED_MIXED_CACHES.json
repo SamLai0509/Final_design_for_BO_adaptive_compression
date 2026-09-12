@@ -1,0 +1,9 @@
+{
+ "Baryon": "NYX_baryon_density__cascA_ours_refNeurLZ.pkl",
+ "Temp": "NYX_temperature__cascA_ours_refNeurLZ.pkl",
+ "DMD": "NYX_dark_matter_density__bd26789958dc.pkl",
+ "Miranda": "Miranda__e8f59c75dabf_band4rep3.pkl",
+ "QMC": "QMCPack__9d11d17c6700.pkl",
+ "Magnetic": "Magnetic__6a75e37efcb5.pkl",
+ "_note": "Ours/base from cascade A (DMD->T->BD; repo pin CASCADE_B); NeurLZ series from PAPER_FINAL (decompressed aux); DMD/Miranda/QMC/Magnetic = PAPER_FINAL"
+}

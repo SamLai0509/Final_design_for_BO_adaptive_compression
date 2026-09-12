@@ -109,10 +109,10 @@ figure is NOT in this repo (it was produced elsewhere; only a per-slice radial F
 ## 6. Data and environment
 
 * NYX 512³ fields: `$ADAMIT_NYX_DIR/{baryon_density,temperature,
-  dark_matter_density,velocity_x,velocity_y,velocity_z}.f32` (float32, (z,y,x)); Miranda `halo_finder_v1/miranda_1024x1024x1024_float32.raw`;
+  dark_matter_density,velocity_x,velocity_y,velocity_z}.f32` (float32, (z,y,x)); Miranda `$ADAMIT_MIRANDA_FILE`;
   QMCPack `<storage>/SDRBench/SDRBENCH-QMCPack/288x115x69x69/einspline_288_115_69_69.pre.f32` (33120×69×69);
-  Magnetic `halo_finder_v1/magnetic_reconnection_512x512x512_float32.raw`. All SDRBench.
-* SZ3: `~/Data_Compression/SZ3/build/lib64/libSZ3c.so` + `tools/pysz` (pysz wrapper; `compress(x,1,0,rel,0)` = REL
+  Magnetic `$ADAMIT_MAGNETIC_FILE`. All SDRBench.
+* SZ3: `$ADAMIT_SZ3_LIB` + `$ADAMIT_PYSZ` (pysz wrapper; `compress(x,1,0,rel,0)` = REL
   mode); SPERR: `$ADAMIT_SPERR_BIN` (`--psnr` target). Edit the paths at the top of
   `sec_4_evaluation/SPERR_fft.py` on the other node. Python: torch (CUDA), numpy, optuna, monai (NeurLZ's BasicUNet), matplotlib.
 * NeurLZ reference code: `/path/to/neurlz/train.py` (it decompresses every sibling at

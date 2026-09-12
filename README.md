@@ -10,8 +10,9 @@ reconstruction = base_decompress(stream) + clamp(model(base_recon, auxiliary_fie
 effective CR   = original_bytes / (base_stream_bytes + model_bytes)
 ```
 
-This branch (`single-gpu`) is the single-GPU version of the paper code. The multi-GPU
-data-parallel experiments (paper Section 4, Table 4) live on a separate branch.
+This branch (`multi-gpu`) is the `single-gpu` code plus the paper's multi-GPU data-parallel
+experiments (§4.4, Table 4, Fig. 13) and the power-spectrum compliance study (Fig. 12, Table 3).
+Everything from `single-gpu` runs unchanged here; the additions live under `sec_4_evaluation/`.
 
 ## Repository layout (one folder per paper section)
 
@@ -25,6 +26,8 @@ data-parallel experiments (paper Section 4, Table 4) live on a separate branch.
 | `sec_3_4_bf16_storage/` | §3.4 BF16 model storage | `bf_16.ipynb`, `bf16_rerun.py` (Fig. 8), `bf16_vs_fp32_results.json`. |
 | `sec_3_5_bayesian_opt/` | §3.5 two-phase adaptive training (TPE + full-resolution) | `nyx_miranda.ipynb` (SZ3 / NYX), `nyx_miranda_sperr.ipynb` (SPERR / Miranda), `bo_combined_plot.ipynb` (Fig. 9), pinned `bo_results/*_final.pkl`. |
 | **`sec_4_evaluation/`** | §4 evaluation | The paper pipeline. `SPERR_fft.py --task {nyx_b,nyx_t,nyx_d,miranda,mag,qmcpack}` runs SZ3, SPERR, AdaMit and NeurLZ for one dataset and caches the result in `sperr_fft_cache/`; `--task aux_prep` archives the matched-CR auxiliary streams; `--task neurlz_long` is the NeurLZ cost study (Table 2). `paper_numbers.py`, `plot_paper_figs.py`, `plot_paper_fft.py` turn the pinned caches (`sperr_fft_cache/PAPER_*.json`) into the paper's numbers and Figs. 10/11. |
+| `sec_4_evaluation/multi_gpu/` | §4.4 one vs. four GPUs (Table 4, Fig. 13) | `bench_compress_table.py` (one dataset × codec at CR≈500 on 1 or 4 GPUs: SZ3/SPERR codec timing, Phase 1 + Phase 2 training under the wall-clock budget, per-epoch PSNR trace, one full-volume inference; `--latex` builds the matched-PSNR table), `aux_siblings.py` (decoder-reproducible NYX siblings: matched-CR archive streams or the enhanced output of an earlier cascade stage, order DMD → temperature → baryon density), `bench_infer_mgpu.py` (z-slab data-parallel inference timing), `run_cascade_nyx.sh` / `run_nyx_paper.sh` (drivers), `plot_paper_2panel.py` (Fig. 13), `bench_out/` (every run's JSON behind Table 4), `eval_parallel_section.tex`. |
+| `sec_4_evaluation/power_spectrum/` | §4.3 power spectrum (Fig. 12, Table 3) | `power_spectrum_fig12.py` trains AdaMit (batch 1, enhanced siblings) and NeurLZ (its own recipe) on NYX baryon density at CR≈300 and records ε(k) after every epoch; `plot_fig12_2panel.py` draws ε(k) and best-so-far max ε(k) vs. training time; `figures/*/fig12_data.json` are the pinned traces. `gimlet/` holds the earlier Gimlet2 (`sim_stats`) analysis: drivers, plot scripts and their `ps3d_out/` results. |
 | `Reproduce/` | all | Whole-chain scripts and notes: `run_all.sh`, `collect.py` (pin results, regenerate figures and numbers), `make_reproduce_nb.py`, `REPORT.md` (every number in the paper and how it was produced), `HANDOFF.md`, `CLEANUP_PLAN.md`, `experiment/` (sibling-protocol, cascade and NeurLZ-cost experiments), `benchmarks/`. Result pickles, figures and logs are written here locally and are not tracked. |
 
 Scripts and notebooks add `base_script/` to `sys.path` (relative to their own location) and import
@@ -177,6 +180,54 @@ chain uninterrupted. Outputs land in `Reproduce/results/` (pins, `paper_numbers.
 `Reproduce/figures/`. The pins the paper was built from are tracked in
 `sec_4_evaluation/sperr_fft_cache/PAPER_*.json` together with the pickles they point to, so the
 plotting commands above work without rerunning anything.
+
+### Step 8: multi-GPU experiments (§4.4, Table 4 / Fig. 13) — this branch only
+
+Hardware used in the paper: one node with four NVIDIA A100 80 GB **PCIe** GPUs (no NVLink; each GPU
+on its own NUMA domain, so all-reduce crosses PCIe 4.0 and the socket interconnect), two 32-core
+AMD EPYC 9334, 1 TB RAM. Runs are launched with `torch.distributed.run`; the volume is split into
+contiguous z-shards (128 slices per GPU for 512³ fields, 256 for Miranda), every GPU samples from its
+own shard and gradients are averaged before each update (DDP). Protocol: the single GPU trains for
+the budget (10 s for 512³ fields, 60 s QMCPack, 80 s Miranda) with a batch of 4 slices per update
+(1024 for QMCPack); the four-GPU run keeps the same batch per update (1 slice per GPU; 256 for
+QMCPack) and is timed to the single-GPU PSNR. Decompression uses z-slab inference on four GPUs,
+bit-identical to the single-GPU pass.
+
+```bash
+cd sec_4_evaluation/multi_gpu
+# 1) enhanced NYX siblings for CR 500 (cascade DMD -> temperature -> baryon; ~10 min on one GPU)
+CR=500 OUT=bench_out/table_cascade ENH=bench_out/enhanced_cr500 bash run_cascade_nyx.sh 1
+# 2) one row of Table 4: single GPU, then four GPUs (both read the enhanced siblings)
+python bench_compress_table.py --dataset nyx_b --codec sz3 --cr 500 --train-s 10 \
+       --aux-mode enhanced --aux-enhanced-dir bench_out/enhanced_cr500 --out bench_out/table --tag nyx_b_sz3_n1
+python -m torch.distributed.run --nproc_per_node=4 bench_compress_table.py --dataset nyx_b --codec sz3 --cr 500 \
+       --train-s 10 --aux-mode enhanced --aux-enhanced-dir bench_out/enhanced_cr500 --out bench_out/table --tag nyx_b_sz3_n4
+#    (non-NYX datasets: drop the --aux-* flags; QMCPack adds --tot-batch 1024; pin a configuration with --axis K --lr_abs LR)
+# 3) the table and Fig. 13
+python bench_compress_table.py --latex bench_out/table/*.json --iso budget
+python plot_paper_2panel.py
+# 4) four-GPU inference timing used in the Dec. columns
+python -m torch.distributed.run --nproc_per_node=4 bench_infer_mgpu.py --dataset nyx_b
+```
+
+`bench_out/` already contains the JSON of every run behind the paper's Table 4, so step 3 works
+without rerunning anything. Per-rank sampling seeds are decorrelated and the training-budget clock is
+opened behind a barrier (`base_script/bg_stage.py`), both required for the four-GPU numbers to be
+meaningful. SPERR is timed single-threaded in both configurations.
+
+### Step 9: power-spectrum compliance (§4.3, Fig. 12 / Table 3) — this branch only
+
+```bash
+cd sec_4_evaluation/power_spectrum
+# AdaMit (batch 1, three seeds) and NeurLZ (100 epochs of its own recipe) at CR~300, eps(k) after every epoch
+python power_spectrum_fig12.py --cr 317.4 --budget 40 --seed 17 --batch 1 \
+       --aux-mode enhanced --aux-enhanced-dir ../multi_gpu/bench_out/enhanced_cr300 --out figures/fig12_b1_s17
+python plot_fig12_2panel.py --data figures/fig12_b1_s17 --neurlz-data figures/fig12_enh
+```
+
+Base CR 317.4 gives an effective CR of 306.7 once the 60 KB model is charged to the payload (SZ3's
+CR is a step function of the error bound here: base ratios between 304 and 317 are unreachable).
+The NeurLZ branch has no cascade and reads matched-CR siblings; it is reused from `figures/fig12_enh`.
 
 ## Ablations, section by section
 

@@ -1,0 +1,27 @@
+{
+  "dataset": "miranda",
+  "world_size": 2,
+  "epochs": 5,
+  "cr": 199.72098816652272,
+  "rel": 0.009999385162347975,
+  "bg_h": 29,
+  "params": 54466,
+  "lr": 0.002,
+  "lr_scaling": true,
+  "find_unused": true,
+  "batch": 1,
+  "steps_per_epoch_per_rank": 512,
+  "total_steps_per_epoch": 1024,
+  "pure_train_s": 43.39166138402652,
+  "wall_s": 44.36076828400837,
+  "epoch_wall": [
+    10.133044909976888,
+    8.337379787990358,
+    8.24648246099241,
+    8.246995761001017,
+    8.247836390975863
+  ],
+  "epoch1_s": 10.133044909976888,
+  "steady_median_s": 8.24741607598844,
+  "psnr": 52.22613702968263
+}

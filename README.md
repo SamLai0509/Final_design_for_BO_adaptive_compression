@@ -32,7 +32,6 @@ CR = original_bytes / (base_stream_bytes + model_param_bytes)      # aux fields 
 | `frequency_head_loss/` | Frequency head / loss ablation (Fig. 6): `fft_err.ipynb`. |
 | `bf_16_vs_32/` | BF16 vs FP32 model storage (Fig. 8): `bf_16.ipynb`, `bf16_rerun.py`. |
 | `MultiGPU_DDP/` | Multi-GPU data-parallel / DDP training (Table 4, Fig. 14): `parallel_compute.ipynb`, `data_parallel_for_{NYX,Miranda}.py`. |
-| `figures/` | Architecture diagrams (pipeline, U-Net block) as SVG/PDF. |
 
 Superseded notebooks and figures live in `_archive_*/` (not tracked). The experiment
 notebooks/scripts add `base_script/` to `sys.path` and import its modules by bare name

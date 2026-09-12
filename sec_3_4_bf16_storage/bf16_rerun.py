@@ -7,7 +7,7 @@ Reuses the notebook's own code (cells 1-2 of bf_16.ipynb are exec'ed: run_ab / p
 Miranda has no siblings and is re-run only so both panels share the sampling setting.
     python bf16_rerun.py   -> bf16_vs_fp32_results.json + bf16_vs_fp32_1x2.{pdf,png}
 """
-import os, json, time
+import os, sys, json, time
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")

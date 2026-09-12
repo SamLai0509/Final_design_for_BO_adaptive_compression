@@ -6,7 +6,7 @@ The single change: the five sibling channels are the decoder's copies (SZ3-archi
 the target's CR, from sec_4_evaluation/sperr_fft_cache/aux_streams/) instead of the lossless originals.
     python norm_rerun.py  -> norm_cr_time_temperature.{pdf,png} + norm_rerun_results.json
 """
-import os, json, time
+import os, sys, json, time
 import numpy as np
 import matplotlib; matplotlib.use("Agg")
 HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)

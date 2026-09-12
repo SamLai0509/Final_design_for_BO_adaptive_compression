@@ -1,0 +1,32 @@
+{
+ "reference (CR-matched siblings)": {
+  "Baryon": "NYX_baryon_density__fa7f138cb47f.pkl",
+  "Temp": "NYX_temperature__00ff868c9ea5.pkl",
+  "DMD": "NYX_dark_matter_density__bd26789958dc.pkl"
+ },
+ "v3 draft (lossless siblings)": {
+  "Baryon": "NYX_baryon_density__bd05a42f7881.pkl",
+  "Temp": "NYX_temperature__e098e8647e54.pkl",
+  "DMD": "NYX_dark_matter_density__bb3e0bab0a5a.pkl"
+ },
+ "no siblings (5090, indicative)": {
+  "Baryon": "NYX_baryon_density__1cb97d57d925.pkl",
+  "Temp": "NYX_temperature__f8d1ea9d8e9b.pkl",
+  "DMD": "NYX_dark_matter_density__4cced88aaad9.pkl"
+ },
+ "no velocity siblings": {
+  "Baryon": "NYX_baryon_density__ea7ada88eeb1.pkl",
+  "Temp": "NYX_temperature__3e23a08e30e7.pkl",
+  "DMD": "NYX_dark_matter_density__7cb8601c02a7.pkl"
+ },
+ "cascade A: DMD -> baryon -> temperature (enhanced siblings)": {
+  "DMD": "NYX_dark_matter_density__a27fafc1a0b7.pkl",
+  "Baryon": "NYX_baryon_density__8f12dd4bd89b.pkl",
+  "Temp": "NYX_temperature__58fd99a0d3c5.pkl"
+ },
+ "cascade B: DMD -> temperature -> baryon (enhanced siblings)": {
+  "DMD": "NYX_dark_matter_density__a27fafc1a0b7.pkl",
+  "Temp": "NYX_temperature__02c65bb5c197.pkl",
+  "Baryon": "NYX_baryon_density__72b3d47d5d40.pkl"
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "selection": {
+  "Baryon": {
+   "Original aux": "NYX_baryon_density__455e15570336.pkl",
+   "Enhanced aux": "NYX_baryon_density__72b3d47d5d40.pkl",
+   "Decompressed aux": "NYX_baryon_density__fa7f138cb47f.pkl",
+   "No aux": "NYX_baryon_density__1cb97d57d925.pkl"
+  },
+  "Temp": {
+   "Original aux": "NYX_temperature__30db2f3a365f.pkl",
+   "Enhanced aux": "NYX_temperature__02c65bb5c197.pkl",
+   "Decompressed aux": "NYX_temperature__00ff868c9ea5.pkl",
+   "No aux": "NYX_temperature__f8d1ea9d8e9b.pkl"
+  }
+ },
+ "note": "origaux/noaux on RTX PRO 6000, paper protocol (shuffled, lr [1e-3,1e-2]); enhanced = single cascade DMD->T->BD: baryon stage 3, temperature stage 2; decompressed = PAPER_FINAL pins"
+}

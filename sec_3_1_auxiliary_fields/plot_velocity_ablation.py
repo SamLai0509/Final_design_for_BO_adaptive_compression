@@ -9,7 +9,9 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); E = f"{REPO}
 pins = json.load(open(f"{E}/EXPERIMENT_PINS.json"))
 WITH, WITHOUT = pins["reference (CR-matched siblings)"], pins["no velocity siblings"]
 def load(f):
-    r = pickle.load(open(f"{E}/pkl/{f}", "rb")); return r.get("results", r) if "results" in r else r
+    _p = next((q for q in (f"{REPO}/sec_4_evaluation/sperr_fft_cache/{f}", f"{E}/pkl/{f}") if os.path.exists(q)), None)
+    if _p is None: raise FileNotFoundError(f"{f}: not in sec_4_evaluation/sperr_fft_cache/ or Reproduce/experiment/pkl/")
+    r = pickle.load(open(_p, "rb")); return r.get("results", r) if "results" in r else r
 FIELDS = [("Baryon", "Baryon density"), ("Temp", "Temperature"), ("DMD", "Dark matter density")]
 METRICS = [("PSNR", "PSNR (dB)"), ("fft_mag", "FFT magnitude error"), ("fft_phase", "FFT phase error")]
 FAM = {"sz3": ("SZ3", "#08519c", "#4355b9", "sz3", "pipe"), "sperr": ("SPERR", "#a50f15", "#e6550d", "sperr", "sperr_pipe")}

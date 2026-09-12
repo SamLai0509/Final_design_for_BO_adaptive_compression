@@ -30,8 +30,8 @@ import os, sys, json, glob, pickle, re, subprocess, time
 import numpy as np
 from IPython.display import Image, display, Markdown
 
-REPO  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SPERR = f"{REPO}/SPERR"
+REPO  = os.path.abspath(os.path.join("__ADAMIT_OUT__", ".."))   # OUT = <repo>/Reproduce
+SPERR = f"{REPO}/sec_4_evaluation"
 OUT   = "__ADAMIT_OUT__"
 CACHE = f"{OUT}/results"                # pinned copies of the result pickles (collect.py)
 FIGS  = f"{OUT}/figures"
@@ -342,6 +342,7 @@ per-z-chunk sharded-expert ablation.
 nb["cells"] = cells
 nb.metadata["kernelspec"] = {"name": "python3", "display_name": "Python 3", "language": "python"}
 import os
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTDIR = os.environ.get("ADAMIT_REPRODUCE_DIR", os.path.join(REPO, "Reproduce"))
 out = f"{OUTDIR}/REPRODUCE.ipynb"
 for c in nb["cells"]:

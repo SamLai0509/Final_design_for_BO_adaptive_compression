@@ -2,7 +2,7 @@
 
 > **Folder names (2026-09-12):** the repository folders were renamed after the paper sections: `Normalization/`→`sec_3_2_normalization/`, `frequency_head_loss/`→`sec_3_3_frequency_loss/`, `Model_parameter_Scaling/`→`sec_3_4_model_scaling/`, `bf_16_vs_32/`→`sec_3_4_bf16_storage/`, `BO_Adaptive/`→`sec_3_5_bayesian_opt/`, `SPERR/`→`sec_4_evaluation/`; the aux-quality / cascade scripts moved from `Reproduce/` to `sec_3_1_auxiliary_fields/`. Machine paths are now resolved by `base_script/local_paths.py`.
 
-This is everything another agent needs to (1) re-run the multi-GPU / parallel experiment (paper Table 4) and
+This is everything another machine needs to (1) re-run the multi-GPU / parallel experiment (paper Table 4) and
 (2) produce the power-spectrum figure (paper Fig. 12: ε(k) of NYX baryon density at CR≈300 and "time to meet the
 Nyx 1 % requirement") under the paper-final sibling protocol, optionally with **enhanced** siblings (cascade).
 Repo: `<repo>` (git, branch main). Companion files: `Reproduce/REPORT.md` (full results

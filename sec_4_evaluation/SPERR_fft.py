@@ -833,7 +833,7 @@ def bench_field_fft(name, target_gt, target_file, aux_list, shape, rel_errs,
             # falls through to the hardcoded default if fallback_axis was never tried
             # at all (shouldn't happen -- it's always enqueued -- but keeps this safe).
             fallback_lr = per_dir[fallback_axis][0] if fallback_axis in per_dir else lr
-            print(f"  [TPE] => spread {spread:.2f} <= {BO_MIN_SPREAD_DB}dB (configs indistinguishable) "
+            print(f"  [TPE] => axis_spread {axis_spread:.2f} <= {BO_MIN_SPREAD_DB}dB (configs indistinguishable) "
                   f"-> axis{fallback_axis}, lr={fallback_lr:.1e} (best tried for that axis)")
             return fallback_axis, fallback_lr
         return best_dir, best_lr

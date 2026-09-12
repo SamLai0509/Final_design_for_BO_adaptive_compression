@@ -1,68 +1,65 @@
-# BO-Adaptive Neural Residual Compression for Scientific Data
+# AdaMit: Adaptive and Frequency-Aware Neural-Enhanced Compression for Scientific Workflows
 
-Improve a lossy base compressor (**SZ3** or **SPERR**) by training a small neural
-network to predict and add back its reconstruction **residual**, raising PSNR at a given
-compression ratio. A two-phase **Bayesian optimization (BO)** stage adapts the training
-configuration (learning rate, slice direction) *per error bound*, so each operating
-point on the rate–distortion curve is trained with its own tuned setup.
+AdaMit is an online neural error-mitigation framework for error-bounded lossy compression of
+scientific data. It works on top of an existing compressor (**SZ3** or **SPERR**): at compression
+time a small 2-D CNN is trained, within a fixed wall-clock budget, to predict the compressor's
+residual. The compressed output is the base bitstream plus the BF16 model weights, and the decoder
+adds the predicted residual to the base reconstruction, clamped to the original error bound.
 
 ```
-reconstruction = base_decompress(stream)  +  model(base_recon, aux_fields)
-CR = original_bytes / (base_stream_bytes + model_param_bytes)      # aux fields not charged
+reconstruction = base_decompress(stream) + clamp(model(base_recon, auxiliary_fields))
+effective CR   = original_bytes / (base_stream_bytes + model_bytes)
 ```
 
-- **Base codec**: SZ3 (error-bounded) or SPERR (wavelet), compresses the target field.
-- **Background (BG) model**: a compact 2-D CNN (`UNET_Model`) that refines the base
-  reconstruction slice-by-slice, with optional auxiliary fields as extra input channels
-  and an optional split-band (low/mid/high) frequency supervision.
-- **Two-phase BO**: Phase 1 runs a cheap proxy Optuna/TPE search of `(lr, slice
-  direction)` *for each `rel_err`*; Phase 2 trains the full data at that error bound
-  using the per-`rel` result.
+Compared with the previous online approach (NeurLZ), AdaMit trains and stores the model online
+per instance, needs no pretrained model, and
 
-## Repo layout
+- **enhanced auxiliary fields**: sibling fields enter the model as the decoder holds them, and a
+  field enhanced earlier in the cascade is fed to later fields in its enhanced form (§3.1);
+- **residual-aware normalization**: a reversible per-field Z-score scheme that keeps the
+  zero-centred residual distribution and is not dominated by extreme values (§3.2);
+- **frequency-aware reconstruction**: a frequency-split three-head architecture trained with a
+  dual-domain (spatial + spectral) loss (§3.3);
+- **model scaling and BF16 storage**: the parameter budget follows the data volume, and the weights
+  are stored in BF16 (§3.4);
+- **adaptive two-phase training**: a TPE search on a half-resolution proxy picks the learning rate
+  and slice orientation in the first 10% of the budget, then full-resolution training (§3.5);
+- **high-throughput online training**: a GPU-resident slicing pipeline and multi-GPU data-parallel
+  training (§3.1, §4.4).
 
-| Folder | What it is |
-|---|---|
-| **`base_script/`** | The core library (imported by every experiment). `bg_stage.py` (train/inference), `experiment.py` (config builder + size budgeting), `bg_shard.py` (model-size selection + sharded training), `bg_normalize.py` / `bg_sampling.py` (helpers), `frequency_losses.py`, `config_io.py` (SZ3 I/O), `metrics.py`, `siren_fft_backbone_model.py` (`UNET_Model`), `train.py` (`TrainConfig`), `Patch_data.py` (samplers). |
-| `BO_Adaptive/` | Two-phase BO of learning rate / slice direction (`lr_slice_direction_*` notebooks; `lr_*.py` DDP scripts). |
-| `Model_parameter_Scaling/` | PSNR-vs-CR sweeps over **model size × error bound** (NYX, Miranda, Magnetic, S3D, Hurricane), with the per-`rel` Phase-1 → Phase-2 pipeline. |
-| `frequency_head_loss/` | Ablation of the frequency head and frequency loss. |
-| `Normalization/` | Input / residual normalization ablation (z-score vs min-max). |
-| `MultiGPU_DDP/` | Multi-GPU data-parallel / DDP training and the sharded-expert (per-z-chunk) scheme. |
-| `SPERR/` | SZ3+model vs **SPERR** (and SPERR+model) comparison across datasets. |
+On six fields from four simulations (NYX, Miranda, Magnetic Reconnection, QMCPack) and two
+compressors, AdaMit reduces the storage footprint by up to 57% at matched PSNR under the same
+training budget, reduces the FFT error by up to 62%, and meets the NYX power-spectrum requirement
+6.7× faster on one GPU and 23× faster on four.
 
-The experiment notebooks/scripts add `base_script/` to `sys.path` and import its modules
-by bare name (`from bg_stage import ...`). `base_script/` is self-contained — it does not
-depend on any other folder.
+## Branches
 
-## Prerequisites
+This `main` branch only holds this overview. The code lives on two branches:
 
-Python packages (`pip install -r requirements.txt`): `numpy`, `torch`, `matplotlib`,
-`pandas`, `optuna`.
+| Branch | Use it for | Contents |
+|---|---|---|
+| **`single-gpu`** | everything that runs on one GPU | The complete pipeline (`sec_4_evaluation/SPERR_fft.py`), the §3 ablations, one folder per paper section, pinned results behind Table 2 and the rate-distortion figures, and a step-by-step README (environment, data, compressors, path configuration, per-section ablation commands). |
+| **`multi-gpu`** | the four-GPU experiments and the power-spectrum study | A superset of `single-gpu`: the same code plus `sec_4_evaluation/multi_gpu/` (one vs. four A100s, §4.4, Table 4) and `sec_4_evaluation/power_spectrum/` (Gimlet power-spectrum compliance, §4.3, Table 3), with the run JSON behind every table row. Needs a node with four GPUs for the multi-GPU rows; the power-spectrum study runs on one GPU. |
 
-External, set up separately (not pip-installable):
-- **SZ3** with its `pysz` Python wrapper — the error-bounded base compressor.
-- **SPERR** (`sperr3d` binary) — the wavelet base compressor (used in `SPERR/`).
+Start with `single-gpu` unless you need the multi-GPU or power-spectrum results:
 
-## ⚠️ Paths are hard-coded
-
-The notebooks and scripts contain **absolute paths** (`/home/sam/...`) for the data
-volumes, the SZ3 shared library, the `pysz` wrapper directory, and the SPERR binary.
-**Edit these to your environment before running.** The scientific data volumes
-(`*.raw`, `*.f32`, `*.d64`, `*.sz`) and checkpoint directories are **not** part of this
-repo (see `.gitignore`); point the paths at your local copies.
-
-In particular, each experiment sets:
-```python
-sys.path.append("/home/sam/Halo_Finder/Final_design/base_script")   # the core library
-PYSZ_PATH = "/home/sam/Data_Compression/SZ3/tools/pysz"             # pysz wrapper dir
-sz_lib_path = "/home/sam/Data_Compression/SZ3/build/lib64/libSZ3c.so"
+```bash
+git clone -b single-gpu <this repository> AdaMit && cd AdaMit    # or -b multi-gpu
+cat README.md                                                    # step-by-step setup and reproduction
 ```
 
-## Running an experiment
+Both branches share the same layout (`base_script/` core library, `sec_3_*` ablations,
+`sec_4_evaluation/` evaluation, `Reproduce/` whole-chain scripts and the results report) and the
+same configuration mechanism: machine-specific paths (SZ3, SPERR, datasets) go into a gitignored
+`local_paths.env`, never into the code.
 
-1. Install the Python deps and make SZ3/`pysz` (and SPERR for `SPERR/`) importable/available.
-2. Edit the absolute paths at the top of the chosen notebook/script to your data + SZ3/SPERR locations.
-3. Open a notebook (e.g. `Model_parameter_Scaling/Miranda_parameters.ipynb`) and run all
-   cells with the Python kernel that has `numpy`/`torch`/`pysz`, or run a DDP script
-   (e.g. `torchrun --nproc_per_node=4 BO_Adaptive/lr_NYX.py`).
+## Requirements in brief
+
+Linux, CUDA, Python ≥ 3.10 with PyTorch, NumPy, Optuna, MONAI (for the NeurLZ baseline) and
+matplotlib; SZ3 with its `pysz` wrapper and the SPERR `sperr3d` binary built from source; the public
+SDRBench NYX, Miranda and Magnetic Reconnection volumes and the QMCPack einspline table. The
+branch READMEs give the exact steps.
+
+## License
+
+MIT, see `LICENSE`.

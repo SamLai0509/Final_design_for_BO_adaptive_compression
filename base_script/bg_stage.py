@@ -323,6 +323,20 @@ def train_bg_only(Xs, Xps, device, cfg, evaluator=None):
     print(f"{_pfx}[early-stop] " + (f"ENABLED | min_drop={getattr(cfg, 'bg_es_min_drop', 0.02)} patience={getattr(cfg, 'bg_es_patience', 2)}"
                                     if early_stop else "DISABLED (cfg.bg_early_stop is False/unset)"))
 
+    # DDP: open the budget clock together. Rank 0 does setup work (weight
+    # broadcast, warm-up) that the other ranks otherwise spend blocked inside
+    # epoch 1's first collective -- charged to THEIR training time, so a 10 s
+    # budget ends after ~7.8 s of real training. Random-mode sampling is also
+    # decorrelated per rank: with a shared seed every rank draws the same local
+    # offsets, so a "batch 256" DDP update carries only 64 distinct positions.
+    _rank_seed_off = 0
+    if bool(getattr(cfg, "bg_ddp", False)):
+        import torch.distributed as dist
+        if dist.is_initialized():
+            if torch.cuda.is_available():
+                torch.cuda.synchronize(device)
+            dist.barrier()
+            _rank_seed_off = dist.get_rank() * 1_000_003
     t_start_train = time.perf_counter()
     eval_time_total = 0.0
     stop_training = False
@@ -400,7 +414,7 @@ def train_bg_only(Xs, Xps, device, cfg, evaluator=None):
                 stop_training = True
                 break
             _steps_done += 1
-            step_seed = seed + ep * 10000 + step
+            step_seed = seed + _rank_seed_off + ep * 10000 + step
 
             # Step-level calibration: probe the steady-state step cost early in epoch 0; if one
             # epoch would eat >80% of the budget, plan the remaining warmup + cosine over the
@@ -465,6 +479,15 @@ def train_bg_only(Xs, Xps, device, cfg, evaluator=None):
             t0 = time.perf_counter()
             cur_p, cur_max_err = _evaluate()
             eval_time_total += time.perf_counter() - t0
+        # Only rank 0 evaluates; the other ranks wait in the next collective.
+        # Broadcast its evaluation cost so the pure-training budget means the
+        # same thing on every rank (otherwise they stop early).
+        if bool(getattr(cfg, "bg_ddp", False)):
+            import torch.distributed as dist
+            if dist.is_initialized():
+                _e = torch.tensor([eval_time_total], device=device, dtype=torch.float64)
+                dist.broadcast(_e, src=0)
+                eval_time_total = float(_e.item())
         cum_train_time = time.perf_counter() - t_start_train - eval_time_total
 
         history["epoch"].append(ep + 1); history["loss"].append(float(np.mean(ep_loss)))

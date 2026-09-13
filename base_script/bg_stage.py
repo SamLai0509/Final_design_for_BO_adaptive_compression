@@ -167,27 +167,33 @@ def run_bg_inference(
 
     mean_t, std_t, min_t, max_t = _build_input_norm_tensors(cfg, model_device, n_fields)
 
+    # Batched slice inference. One forward per slice makes the cost launch
+    # overhead rather than compute whenever slices are small: QMCPack's 33,120
+    # slices of 69x69 take ~14 s one at a time against ~2 s batched, and NYX's
+    # 512 slices of 512x512 ~1.6 s against ~1.25 s. Convolutions are
+    # per-sample, so stacking slices is numerically the same computation; the
+    # batch holds the pixels per forward roughly constant (cfg.bg_infer_px_budget).
+    px_budget = int(getattr(cfg, "bg_infer_px_budget", 4_000_000))
+    n_b = int(np.clip(px_budget // max(1, height * width), 1, 512))
     with torch.no_grad():
-        for z in range(z_lo, z_hi):
-            y0 = 0
-            x0 = 0
-
-            slice_data = np.stack([field[z] for field in Xps], axis=0).astype(np.float32)
-            slice_t = torch.from_numpy(slice_data).unsqueeze(0).to(model_device)
-            slice_norm = normalize_bg_inputs(slice_t, cfg, mean_t, std_t, min_t, max_t)
-            pred_norm = model.bg_forward(slice_norm)
+        blk_t = torch.empty((n_b, n_fields, height, width), dtype=torch.float32, device=model_device)
+        for zb in range(z_lo, z_hi, n_b):
+            ze = min(zb + n_b, z_hi)
+            for i, f in enumerate(Xps):        # f[zb:ze] is contiguous: straight to the device
+                blk_t[:ze - zb, i] = torch.from_numpy(
+                    np.ascontiguousarray(f[zb:ze], dtype=np.float32)).to(model_device)
+            blk_norm = normalize_bg_inputs(blk_t[:ze - zb], cfg, mean_t, std_t, min_t, max_t)
+            pred_norm = model.bg_forward(blk_norm)
 
             if _bg_residual_norm_mode(cfg) == "revin_slice":
                 res_raw = torch.from_numpy(
-                    (gt_target[z] - lq_target[z]).astype(np.float32)
-                ).to(model_device).view(1, 1, height, width)
+                    np.ascontiguousarray(gt_target[zb:ze] - lq_target[zb:ze], dtype=np.float32)
+                ).to(model_device).view(ze - zb, 1, height, width)
                 r_mu, r_sig = _revin_mu_sig(res_raw, _bg_norm_eps(cfg))
-                pred = denormalize_bg_residual_tensor(
-                    pred_norm, cfg, revin_mu=r_mu, revin_sig=r_sig
-                ).cpu().numpy()[0, 0]
+                pred = denormalize_bg_residual_tensor(pred_norm, cfg, revin_mu=r_mu, revin_sig=r_sig)
             else:
-                pred = denormalize_bg_residual_tensor(pred_norm, cfg).cpu().numpy()[0, 0]
-            ai_contribution[z] = pred
+                pred = denormalize_bg_residual_tensor(pred_norm, cfg)
+            ai_contribution[zb:ze] = pred[:, 0].cpu().numpy()
 
     x_hat_raw = lq_target + ai_contribution
     x_hat_raw = _error_bounded_post_process(

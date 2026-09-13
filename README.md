@@ -225,12 +225,12 @@ cd sec_4_evaluation/power_spectrum
 # AdaMit (batch 1) and NeurLZ (100 epochs of its own recipe) at CR~300, eps(k) after every epoch
 python power_spectrum_fig12.py --cr 317.4 --budget 40 --seed 17 --batch 1 \
        --aux-mode enhanced --aux-enhanced-dir ../multi_gpu/bench_out/enhanced_cr300 --out figures/fig12_b1_s17
-python plot_fig12_2panel.py --data figures/fig12_b1_s17 --neurlz-data figures/fig12_enh
+python plot_fig12_2panel.py --data figures/fig12_b1_s17 --neurlz-data figures/fig12_neurlz
 ```
 
 Base CR 317.4 gives an effective CR of 306.7 once the 60 KB model is charged to the payload (SZ3's
 CR is a step function of the error bound here: base ratios between 304 and 317 are unreachable).
-The NeurLZ branch has no cascade and reads matched-CR siblings; it is reused from `figures/fig12_enh`.
+The NeurLZ branch has no cascade and reads matched-CR siblings; it is reused from `figures/fig12_neurlz`.
 
 ## Ablations, section by section
 

@@ -5,9 +5,10 @@ Left : eps(k) of SZ3, SZ3+NeurLZ and SZ3+Ours at the point each first meets
 Right: the requirement metric itself -- best max_k eps(k) so far -- against
        pure training wall time, both curves starting from the SZ3 base.
 
-The sibling protocol is whatever the data dir was produced with (printed on
-run): fig12_enh feeds Ours ENHANCED siblings -- an earlier cascade stage's
-corrected output -- and NeurLZ cr_matched ones, since NeurLZ has no cascade.
+Data directories: figures/fig12_b1_s17 holds the AdaMit run behind the
+figure (batch 1, enhanced siblings, base CR 317.4 -> effective 306.7);
+figures/fig12_neurlz holds the NeurLZ branch (its own recipe, 100 epochs,
+CR-matched siblings -- NeurLZ has no cascade), passed via --neurlz-data.
 
 Knobs below are kept identical to plot_pk_time_2panel_cr300.ipynb so the two
 figures render the same; only YLIM_R differs (that data reaches 2.9 %, this
@@ -21,7 +22,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--data", default="figures/fig12_enh")
+ap.add_argument("--data", default="figures/fig12_b1_s17")
 ap.add_argument("--neurlz-data", dest="nl_data", default=None,
                 help="take the NeurLZ branch from a different run, e.g. when "
                      "Ours was rerun at its own base CR to align the effective "

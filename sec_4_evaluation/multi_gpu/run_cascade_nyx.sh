@@ -13,7 +13,10 @@
 # 1..N-1 produced and falls back to the cr_matched archive for the rest.
 #
 #   bash run_cascade_nyx.sh [1|4]            # GPUs, default 1
-# env: OUT=<json dir>  ENH=<export dir>  CR=<target CR>  EPOCHS=<n>
+# env: OUT=<json dir>  ENH=<export dir>  CR=<target CR>  TRAIN_S=<pure-training budget, s>
+#      LAUNCH1 / LAUNCH4: launcher prefix for the 1- and 4-GPU steps (empty = run on
+#      this machine; under Slurm e.g. LAUNCH4='srun -p <partition> --gres=gpu:4')
+#      LOG_DIR: where per-stage logs go (default /tmp)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -21,7 +24,10 @@ NG=${1:-1}
 OUT=${OUT:-bench_out/table_cascade}
 ENH=${ENH:-bench_out/enhanced_siblings}
 CR=${CR:-500}
-EPOCHS=${EPOCHS:-10}
+TRAIN_S=${TRAIN_S:-10}
+LAUNCH1=${LAUNCH1:-}
+LAUNCH4=${LAUNCH4:-}
+LOG_DIR=${LOG_DIR:-/tmp}
 PORT=${PORT:-29850}
 PY=${PYTHON:-python}
 
@@ -30,18 +36,16 @@ mkdir -p "$OUT" "$ENH"
 run () {                      # run <task> <aux-mode> <tag>
   local task=$1 mode=$2 tag=$3
   echo "=================== $task ($mode, ${NG} gpu) ==================="
-  local args=(--dataset "$task" --cr "$CR" --epochs "$EPOCHS" --out "$OUT"
+  local args=(--dataset "$task" --cr "$CR" --train-s "$TRAIN_S" --out "$OUT"
               --tag "$tag" --aux-mode "$mode"
               --export-enhanced-dir "$ENH")
   [[ "$mode" == "enhanced" ]] && args+=(--aux-enhanced-dir "$ENH")
 
   if [[ "$NG" == "1" ]]; then
-    srun -p gpuquick --gres=gpu:1 --cpus-per-task=8 --time=02:00:00 \
-      "$PY" bench_compress_table.py "${args[@]}" 2>&1 | tee "/tmp/casc_${task}_n${NG}.log"
+    $LAUNCH1 "$PY" bench_compress_table.py "${args[@]}" 2>&1 | tee "$LOG_DIR/casc_${task}_n${NG}.log"
   else
-    srun -p gpuquick --gres=gpu:"$NG" --cpus-per-task=16 --time=02:00:00 \
-      "$PY" -m torch.distributed.run --nproc_per_node="$NG" --master_port="$PORT" \
-      bench_compress_table.py "${args[@]}" 2>&1 | tee "/tmp/casc_${task}_n${NG}.log"
+    $LAUNCH4 "$PY" -m torch.distributed.run --nproc_per_node="$NG" --master_port="$PORT" \
+      bench_compress_table.py "${args[@]}" 2>&1 | tee "$LOG_DIR/casc_${task}_n${NG}.log"
   fi
 }
 

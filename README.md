@@ -26,7 +26,7 @@ Everything from `single-gpu` runs unchanged here; the additions live under `sec_
 | `sec_3_4_bf16_storage/` | §3.4 BF16 model storage | `bf_16.ipynb`, `bf16_rerun.py` (Fig. 8), `bf16_vs_fp32_results.json`. |
 | `sec_3_5_bayesian_opt/` | §3.5 two-phase adaptive training (TPE + full-resolution) | `nyx_miranda.ipynb` (SZ3 / NYX), `nyx_miranda_sperr.ipynb` (SPERR / Miranda), `bo_combined_plot.ipynb` (Fig. 9), pinned `bo_results/*_final.pkl`. |
 | **`sec_4_evaluation/`** | §4 evaluation | The paper pipeline. `SPERR_fft.py --task {nyx_b,nyx_t,nyx_d,miranda,mag,qmcpack}` runs SZ3, SPERR, AdaMit and NeurLZ for one dataset and caches the result in `sperr_fft_cache/`; `--task aux_prep` archives the matched-CR auxiliary streams; `--task neurlz_long` is the NeurLZ cost study (Table 2). `paper_numbers.py`, `plot_paper_figs.py`, `plot_paper_fft.py` turn the pinned caches (`sperr_fft_cache/PAPER_*.json`) into the paper's numbers and Figs. 10/11. |
-| `sec_4_evaluation/multi_gpu/` | §4.4 one vs. four GPUs (Table 4, Fig. 13) | `bench_compress_table.py` (one dataset × codec at CR≈500 on 1 or 4 GPUs: SZ3/SPERR codec timing, Phase 1 + Phase 2 training under the wall-clock budget, per-epoch PSNR trace, one full-volume inference; `--latex` builds the matched-PSNR table), `aux_siblings.py` (decoder-reproducible NYX siblings: matched-CR archive streams or the enhanced output of an earlier cascade stage, order DMD → temperature → baryon density), `bench_infer_mgpu.py` (z-slab data-parallel inference timing), `run_cascade_nyx.sh` / `run_nyx_paper.sh` (drivers), `plot_paper_2panel.py` (Fig. 13), `bench_out/` (every run's JSON behind Table 4), `eval_parallel_section.tex`. |
+| `sec_4_evaluation/multi_gpu/` | §4.4 one vs. four GPUs (Table 4, Fig. 13) | `bench_compress_table.py` (one dataset × codec at CR≈500 on 1 or 4 GPUs: SZ3/SPERR codec timing, Phase 1 + Phase 2 training under the wall-clock budget, per-epoch PSNR trace, one full-volume inference; `--latex` builds the matched-PSNR table), `aux_siblings.py` (decoder-reproducible NYX siblings: matched-CR archive streams or the enhanced output of an earlier cascade stage, order DMD → temperature → baryon density), `bench_infer_mgpu.py` (z-slab data-parallel inference timing), `run_cascade_nyx.sh` / `run_nyx_paper.sh` (drivers), `make_table4.py` (rebuilds Table 4 from the pinned runs), `plot_paper_2panel.py` (Fig. 13), `bench_out/` (every run's JSON behind Table 4), `eval_parallel_section.tex`. |
 | `sec_4_evaluation/power_spectrum/` | §4.3 power spectrum (Fig. 12, Table 3) | `power_spectrum_fig12.py` trains AdaMit (batch 1, enhanced siblings) and NeurLZ (its own recipe) on NYX baryon density at CR≈300 and records ε(k) after every epoch; `plot_fig12_2panel.py` draws ε(k) and best-so-far max ε(k) vs. training time; `figures/*/fig12_data.json` are the pinned traces. |
 | `Reproduce/` | all | Whole-chain scripts and notes: `run_all.sh`, `collect.py` (pin results, regenerate figures and numbers), `make_reproduce_nb.py`, `REPORT.md` (every number in the paper and how it was produced), `HANDOFF.md`, `CLEANUP_PLAN.md`, `experiment/` (sibling-protocol, cascade and NeurLZ-cost experiments), `benchmarks/`. Result pickles, figures and logs are written here locally and are not tracked. |
 
@@ -195,8 +195,9 @@ bit-identical to the single-GPU pass.
 
 ```bash
 cd sec_4_evaluation/multi_gpu
-# 1) enhanced NYX siblings for CR 500 (cascade DMD -> temperature -> baryon; ~10 min on one GPU)
-CR=500 OUT=bench_out/table_cascade ENH=bench_out/enhanced_cr500 bash run_cascade_nyx.sh 1
+# 1) enhanced NYX siblings for CR 500 (cascade DMD -> temperature -> baryon, 10 s budget per stage; ~10 min on one GPU)
+CR=500 TRAIN_S=10 OUT=bench_out/table_cascade ENH=bench_out/enhanced_cr500 bash run_cascade_nyx.sh 1
+#    (the drivers run on the current machine; under a scheduler set LAUNCH1/LAUNCH4, e.g. LAUNCH4='srun -p <partition> --gres=gpu:4')
 # 2) one row of Table 4: single GPU, then four GPUs (both read the enhanced siblings)
 python bench_compress_table.py --dataset nyx_b --codec sz3 --cr 500 --train-s 10 \
        --aux-mode enhanced --aux-enhanced-dir bench_out/enhanced_cr500 --out bench_out/table --tag nyx_b_sz3_n1
@@ -204,14 +205,16 @@ python -m torch.distributed.run --nproc_per_node=4 bench_compress_table.py --dat
        --train-s 10 --aux-mode enhanced --aux-enhanced-dir bench_out/enhanced_cr500 --out bench_out/table --tag nyx_b_sz3_n4
 #    (non-NYX datasets: drop the --aux-* flags; QMCPack adds --tot-batch 1024; pin a configuration with --axis K --lr_abs LR)
 # 3) the table and Fig. 13
-python bench_compress_table.py --latex bench_out/table/*.json --iso budget
-python plot_paper_2panel.py
+python make_table4.py                 # Table 4 exactly as in the paper, from the pinned runs in bench_out/
+python make_table4.py --plain         # same, as aligned text
+python plot_paper_2panel.py           # Fig. 13
+#    (bench_compress_table.py --latex <jsons> --iso budget builds the same kind of table from any set of runs)
 # 4) four-GPU inference timing used in the Dec. columns
 python -m torch.distributed.run --nproc_per_node=4 bench_infer_mgpu.py --dataset nyx_b
 ```
 
-`bench_out/` already contains the JSON of every run behind the paper's Table 4, so step 3 works
-without rerunning anything. Per-rank sampling seeds are decorrelated and the training-budget clock is
+`bench_out/` already contains the JSON of every run behind the paper's Table 4 (`make_table4.py` pins
+which run backs which row), so step 3 works without rerunning anything. Per-rank sampling seeds are decorrelated and the training-budget clock is
 opened behind a barrier (`base_script/bg_stage.py`), both required for the four-GPU numbers to be
 meaningful. SPERR is timed single-threaded in both configurations.
 

@@ -18,6 +18,9 @@ AUXMODE=${AUXMODE:-cr_matched}
 ENH=${ENH:-}
 PORT=${PORT:-29870}
 PY=${PYTHON:-python}
+LAUNCH1=${LAUNCH1:-}   # launcher prefix for 1-GPU steps (empty = run here)
+LAUNCH4=${LAUNCH4:-}   # launcher prefix for 4-GPU steps
+LOG_DIR=${LOG_DIR:-/tmp}
 TASKS=${1:-"nyx_d nyx_t nyx_b"}
 CODECS=${2:-"sz3 sperr"}
 
@@ -29,14 +32,12 @@ for codec in $CODECS; do
   for t in $TASKS; do
     for ng in 1 4; do
       echo "=================== $t / $codec / ${ng}gpu ==================="
-      log=/tmp/nyxp_${t}_${codec}_n${ng}.log
+      log="$LOG_DIR/nyxp_${t}_${codec}_n${ng}.log"
       if [[ "$ng" == "1" ]]; then
-        srun -p gpuquick --gres=gpu:1 --cpus-per-task=8 --time=01:00:00 \
-          "$PY" bench_compress_table.py --dataset "$t" --codec "$codec" \
+        $LAUNCH1 "$PY" bench_compress_table.py --dataset "$t" --codec "$codec" \
           --tag "${t}_${codec}_n1" "${common[@]}" 2>&1 | tee "$log" | grep -E "\[aux\]|\[setup\]|\[done\]|Error"
       else
-        srun -p gpuquick --gres=gpu:4 --cpus-per-task=16 --time=01:00:00 \
-          "$PY" -m torch.distributed.run --nproc_per_node=4 --master_port="$PORT" \
+        $LAUNCH4 "$PY" -m torch.distributed.run --nproc_per_node=4 --master_port="$PORT" \
           bench_compress_table.py --dataset "$t" --codec "$codec" \
           --tag "${t}_${codec}_n4" "${common[@]}" 2>&1 | tee "$log" | grep -E "\[setup\]|\[done\]|Error"
       fi

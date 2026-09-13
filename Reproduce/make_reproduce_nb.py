@@ -274,17 +274,25 @@ display(Image(f"{FIGS}/Fig8_bo_phase1_phase2.png", width=1000))
 """)
 
 md(r"""
-## 6. Model-size scaling at matched epochs (Sec. 4.x — iso-epoch figure)
+## 6. Model-size scaling at matched epochs (Sec. 3.4, Fig. 7)
 
-`sec_3_4_model_scaling/nyx_miranda_isoepoch.ipynb` (NYX baryon + Miranda; Miranda budgets 75k/136k/240k/400k/500k params) and
-`sec_3_4_model_scaling/nyx_temp_qmcpack_isoepoch.ipynb` (NYX temperature + QMCPack, 3k–30k params) train every model size for the
-same `FIXED_EPOCHS = 10` at each of the five rel bands, so the comparison isolates capacity from wall-clock. Outputs:
-`psnr_vs_cr_isoepoch_nyx_miranda500k.pdf`, `psnr_vs_cr_isoepoch_nyxtemp_qmcpack.pdf`, `psnr_vs_cr_isoepoch_nyx_baryon_temp.pdf`.
+`sec_3_4_model_scaling/isoepoch_nyx_rerun.py` (NYX baryon density + temperature, 3k–30k params, paper protocol) and the
+interactive `sec_3_4_model_scaling/nyx_miranda_isoepoch.ipynb` (adds the Miranda sweep, 75k–500k params) train every model
+size for the same `FIXED_EPOCHS = 10` at each of the five rel bands, so the comparison isolates capacity from wall-clock.
+Tracked output: `psnr_vs_cr_isoepoch_nyx_baryon_temp.pdf` (Fig. 7); the Miranda / QMCPack sweeps are local outputs.
 """)
 
 code(r"""
+# The paper keeps the NYX panel (sec_3_4_model_scaling/psnr_vs_cr_isoepoch_nyx_baryon_temp.pdf, Fig. 7). The
+# Miranda / QMCPack sweeps are local outputs of nyx_miranda_isoepoch.ipynb and are shown only when present.
 for f in ("psnr_vs_cr_isoepoch_nyx_baryon_temp", "psnr_vs_cr_isoepoch_nyx_miranda500k", "psnr_vs_cr_isoepoch_nyxtemp_qmcpack"):
-    display(Markdown(f"`Reproduce/figures/scaling/{f}.pdf`")); display(Image(f"{FIGS}/scaling/{f}.png", width=800))
+    png, pdf = f"{FIGS}/scaling/{f}.png", f"{FIGS}/scaling/{f}.pdf"
+    if os.path.isfile(png):
+        display(Markdown(f"`Reproduce/figures/scaling/{f}.pdf`")); display(Image(png, width=800))
+    elif os.path.isfile(pdf):
+        display(Markdown(f"`Reproduce/figures/scaling/{f}.pdf` (PDF only; open it directly)"))
+    else:
+        display(Markdown(f"`{f}`: not present (run `sec_3_4_model_scaling/isoepoch_nyx_rerun.py` / `nyx_miranda_isoepoch.ipynb`)"))
 """)
 
 md(r"""
@@ -299,9 +307,16 @@ md(r"""
 """)
 
 code(r"""
-print("\n".join(open(f"{OUT}/benchmarks/cr300_1epoch_timing.log").read().strip().splitlines()[-9:]))
+# Both files are produced locally by the two benchmark scripts and are not tracked in git.
+_tl, _io = f"{OUT}/benchmarks/cr300_1epoch_timing.log", f"{OUT}/benchmarks/fast_io_bench.json"
+if os.path.isfile(_tl):
+    print("\n".join(open(_tl).read().strip().splitlines()[-9:]))
+else:
+    print("(cr300_1epoch_timing.log not present: run  python Reproduce/benchmarks/cr300_1epoch_timing.py)")
 print()
-J = json.load(open(f"{OUT}/benchmarks/fast_io_bench.json"))
+J = json.load(open(_io)) if os.path.isfile(_io) else []
+if not J:
+    print("(fast_io_bench.json not present: run  python Reproduce/benchmarks/fast_io_bench.py)")
 print(f"{'pipeline':26s} {'comp s':>7s} {'write s':>8s} {'read s':>7s} {'decomp s':>9s} {'train s':>8s} {'infer s':>8s} {'total s':>8s} {'stream':>10s} {'CR':>6s} {'PSNR':>7s}")
 for r in J:
     tot = r['comp']+r['write']+r['read']+r['decomp']+r['train']+r['infer']
@@ -311,7 +326,7 @@ for r in J:
 md(r"""
 ## 8. Multi-GPU / parallel experiment (Table 4)
 
-`MultiGPU_DDP/parallel_compute.ipynb` trains one model with `torch.nn.DataParallel` over four GPUs (`bg_batch = 4`, `bg_sample_mode = z_shard`:
+The multi-GPU experiments live on the `multi-gpu` branch (`sec_4_evaluation/multi_gpu/`). The earlier `MultiGPU_DDP/parallel_compute.ipynb` trained one model with `torch.nn.DataParallel` over four GPUs (`bg_batch = 4`, `bg_sample_mode = z_shard`:
 the four slices of a step come from four z-shards) and compares against one GPU at **equal wall-clock** (the paper's iso-quality/time framing),
 on NYX dark-matter density. `MultiGPU_DDP/data_parallel_for_{NYX,Miranda}.py` are the `torchrun` DDP variants; `shard_expert.ipynb` is the
 per-z-chunk sharded-expert ablation.

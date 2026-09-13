@@ -298,9 +298,11 @@ search (`_phase1_best_fast`) and the model-size budgeting (`bg_shard.pick_bg_h_u
 
 ## Notes
 
-- The pipeline is deterministic up to cuDNN autotuning; Phase-1 picks can differ between runs by a
-  few tenths of a dB on 512² slices (QMCPack runs are bit-reproducible). `SPERR_DET=1` forces
-  deterministic kernels at some speed cost.
+- Runs are wall-clock budgeted and cuDNN autotuned, so they are not bit-reproducible: the Phase-1
+  pick (learning rate, slice axis) can change from run to run, and the final PSNR typically moves by a
+  few tenths of a dB. QMCPack is the most sensitive case (its 33,120 thin slices fit only about half an
+  epoch into the 60 s budget), and an unlucky learning-rate pick can leave a single operating point at
+  the base compressor's quality. `SPERR_DET=1` forces deterministic cuDNN kernels at some speed cost.
 - Miranda's NeurLZ pass needs ~50 GB of host RAM; never run two training jobs on one machine, the
   wall-clock budgets would no longer be comparable.
 - `Reproduce/REPORT.md` documents every number in the paper and how it was produced.

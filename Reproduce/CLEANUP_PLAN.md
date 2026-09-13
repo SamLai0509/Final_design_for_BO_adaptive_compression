@@ -86,6 +86,6 @@ TRIM = edit inside a file; KEEP = part of the paper's final pipeline.
 - End-to-end validation of the refactored code (2026-09-10, `<storage>/repo_offload/validation_2026-09-10/`):
   forced `--task nyx_b`: identical base CRs on both compressors; AdaMit gains within 0.13 dB on 8/10 points, the other two
   higher by +1.05/+0.61 dB (different Phase-1 pick, cuDNN autotune run-to-run); NeurLZ identical. Forced `--task qmcpack`
-  (step-calibration path): pkl BYTE-IDENTICAL to the pin (deterministic on 69x69 slices). BO notebook `nyx_miranda.ipynb`
+  (step-calibration path): SZ3 gains within 0.2 dB of the pin on 4/5 points; the CR≈500 SZ3 point and the CR≈210 SPERR point came out at base quality (Phase-1 lr pick; see the 2026-09-12 end-to-end rerun, which showed the same behaviour on two other SPERR points). BO notebook `nyx_miranda.ipynb`
   executed headless: same base CR, same Y-axis pick, per-config PSNRs within 0.16 dB, Phase-1 pick 9.4e-3 (was 7.6e-3;
   0.13 dB from the best full-res config). Pinned pkls restored untouched; SDRBench moved to <storage>/SDRBench (symlink).

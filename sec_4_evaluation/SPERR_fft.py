@@ -22,6 +22,8 @@ Same --task CLI as SPERR.py, for SLURM-style per-dataset parallel launches:
   and draws the two combined figures.
 """
 import os, sys, time, subprocess, hashlib, pickle, io, contextlib, random, argparse
+import shutil, tempfile
+_TMP = tempfile.gettempdir()
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -152,7 +154,7 @@ def run_sperr(data_file, target_gt, shape, drange, target_psnr, dtype=np.float32
     is64 = np.dtype(dtype) == np.dtype(np.float64)
     bpe  = 8 if is64 else 4
     tag = f"{os.getpid()}_{time.time_ns()}"
-    bit = f"/tmp/sperr_{tag}.bit"; rec = f"/tmp/sperr_{tag}.dec.{'f64' if is64 else 'f32'}"
+    bit = f"{_TMP}/sperr_{tag}.bit"; rec = f"{_TMP}/sperr_{tag}.dec.{'f64' if is64 else 'f32'}"
     p1 = subprocess.run([SPERR_BIN, "-c", "--ftype", ("64" if is64 else "32"),
                         "--dims", str(W), str(H), str(D), "--psnr", f"{float(target_psnr):.4f}",
                         "--bitstream", bit, data_file], capture_output=True, text=True, env=_SPERR_ENV)
@@ -383,7 +385,7 @@ def _enhanced_sibling(a_file, compressor, cr_base, shape):
 def _sperr_compress_file(data_file, shape, dtype, target_psnr):
     W, H, D = shape[2], shape[1], shape[0]
     is64 = np.dtype(dtype) == np.dtype(np.float64)
-    bit = f"/tmp/sperr_aux_{os.getpid()}_{time.time_ns()}.bit"
+    bit = f"{_TMP}/sperr_aux_{os.getpid()}_{time.time_ns()}.bit"
     subprocess.run([SPERR_BIN, "-c", "--ftype", ("64" if is64 else "32"), "--dims", str(W), str(H), str(D),
                     "--psnr", f"{float(target_psnr):.4f}", "--bitstream", bit, str(data_file)],
                    capture_output=True, text=True, env=_SPERR_ENV)
@@ -392,7 +394,7 @@ def _sperr_compress_file(data_file, shape, dtype, target_psnr):
 
 def _sperr_decompress_file(bit, shape, dtype):
     is64 = np.dtype(dtype) == np.dtype(np.float64)
-    rec = f"/tmp/sperr_aux_{os.getpid()}_{time.time_ns()}.dec"
+    rec = f"{_TMP}/sperr_aux_{os.getpid()}_{time.time_ns()}.dec"
     subprocess.run([SPERR_BIN, "-d", ("--decomp_d" if is64 else "--decomp_f"), rec, bit],
                    capture_output=True, text=True, env=_SPERR_ENV)
     arr = np.ascontiguousarray(np.fromfile(rec, dtype=dtype).reshape(shape), np.float32)
@@ -457,7 +459,7 @@ def _aux_at_cr_level(a, a_file, shape, level, compressor, dtype=np.float32, tol=
                 break
             if cr > level: lo = mid              # too coarse -> higher PSNR target
             else:          hi = mid
-        os.replace(best[3], bit)
+        shutil.move(best[3], bit)          # not os.replace: the temp file may sit on another filesystem than the cache
         dec = _sperr_decompress_file(bit, shape, dtype)
     else:
         raise ValueError(f"unknown compressor {compressor!r}")
